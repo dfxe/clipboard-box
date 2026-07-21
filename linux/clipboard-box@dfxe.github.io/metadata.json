@@ -1,0 +1,7 @@
+{
+  "uuid": "clipboard-box@dfxe.github.io",
+  "name": "clipboard-box",
+  "description": "Recent screenshots in the top bar. Click a thumbnail to copy the PNG to the clipboard.",
+  "shell-version": ["45", "46", "47"],
+  "url": "https://github.com/dfxe/clipboard-box"
+}
