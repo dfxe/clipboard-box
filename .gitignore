@@ -1,2 +1,5 @@
 macos/build/
 .DS_Store
+
+# Built from the .gschema.xml by glib-compile-schemas (see README).
+gschemas.compiled

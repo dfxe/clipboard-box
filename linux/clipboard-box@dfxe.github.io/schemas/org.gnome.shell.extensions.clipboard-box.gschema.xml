@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.clipboard-box"
+          path="/org/gnome/shell/extensions/clipboard-box/">
+
+    <key name="max-items" type="i">
+      <default>200</default>
+      <range min="1" max="1000"/>
+      <summary>Maximum history entries</summary>
+      <description>Oldest unpinned entries are dropped once the history exceeds this many items.</description>
+    </key>
+
+    <key name="store-images" type="b">
+      <default>true</default>
+      <summary>Store copied images</summary>
+      <description>When off, only copied text is recorded; images placed on the clipboard are ignored. Explicit Area/Screen captures are always stored.</description>
+    </key>
+
+    <key name="screenshots-dir" type="s">
+      <default>''</default>
+      <summary>Screenshots folder</summary>
+      <description>Folder to watch and to save captures into. Empty means the default ~/Pictures/Screenshots.</description>
+    </key>
+
+    <key name="max-image-bytes" type="i">
+      <default>10485760</default>
+      <range min="0" max="2147483647"/>
+      <summary>Maximum copied-image size in bytes</summary>
+      <description>Copied images larger than this are not stored. 0 means unlimited. Does not affect Area/Screen captures.</description>
+    </key>
+
+    <key name="entry-ttl-days" type="i">
+      <default>0</default>
+      <range min="0" max="3650"/>
+      <summary>Entry lifetime in days</summary>
+      <description>Unpinned entries older than this are dropped automatically. 0 means never expire.</description>
+    </key>
+
+    <key name="encrypt-at-rest" type="b">
+      <default>false</default>
+      <summary>Encrypt history at rest</summary>
+      <description>Reserved for a future release; not yet implemented.</description>
+    </key>
+
+    <key name="paused" type="b">
+      <default>false</default>
+      <summary>Pause clipboard monitoring</summary>
+      <description>When on, newly copied content is not recorded.</description>
+    </key>
+
+    <key name="clipboard-helper-warned" type="b">
+      <default>false</default>
+      <summary>Clipboard helper warning shown</summary>
+      <description>Set once the missing xclip/wl-paste notification has been shown, so it is not repeated.</description>
+    </key>
+
+    <key name="toggle-menu" type="as">
+      <default>[]</default>
+      <summary>Open the clipboard menu</summary>
+      <description>Keyboard shortcut that toggles the clipboard-box popup.</description>
+    </key>
+
+    <key name="capture-area" type="as">
+      <default>[]</default>
+      <summary>Capture an area screenshot</summary>
+      <description>Keyboard shortcut that starts an interactive area capture.</description>
+    </key>
+
+    <key name="capture-full" type="as">
+      <default>[]</default>
+      <summary>Capture a full-screen screenshot</summary>
+      <description>Keyboard shortcut that captures the whole screen.</description>
+    </key>
+
+  </schema>
+</schemalist>

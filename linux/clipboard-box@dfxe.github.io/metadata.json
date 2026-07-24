@@ -1,7 +1,8 @@
 {
   "uuid": "clipboard-box@dfxe.github.io",
   "name": "clipboard-box",
-  "description": "Recent screenshots in the top bar. Click a thumbnail to copy the PNG to the clipboard.",
-  "shell-version": ["45", "46", "47"],
+  "description": "Clipboard vault in the top bar: history of copied text and images, recent screenshots, and Area/Screen capture. Click any entry to copy it back.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "settings-schema": "org.gnome.shell.extensions.clipboard-box",
   "url": "https://github.com/dfxe/clipboard-box"
 }

@@ -14,5 +14,50 @@
 
 .cb-hint {
     font-size: 0.8em;
-    color: rgba(255, 255, 255, 0.6);
+    /* Follows the current theme's foreground instead of a hardcoded white,
+       so it stays readable on light themes too. */
+    color: inherit;
+    opacity: 0.6;
+}
+
+.cb-btn-row {
+    spacing: 8px;
+}
+
+.cb-scroll {
+    /* max-height is set inline per-monitor in _syncScrollHeight; keep a stable
+       width so the popup doesn't jump around as the history changes. */
+    min-width: 360px;
+    max-width: 560px;
+}
+
+.cb-capture-btn {
+    padding: 6px 12px;
+}
+
+.cb-search {
+    margin: 4px 0;
+    min-width: 360px;
+}
+
+/* Per-row Pin / Delete actions, vertically centred against the thumbnail and
+   revealed a little more on hover so they stay unobtrusive at rest. */
+.cb-row-actions {
+    spacing: 4px;
+    margin-left: 8px;
+}
+
+.cb-row-btn {
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.55;
+}
+
+.cb-row-btn:hover,
+.cb-row-btn:focus {
+    opacity: 1;
+}
+
+.cb-row-btn.cb-pinned {
+    opacity: 1;
 }

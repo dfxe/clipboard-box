@@ -1,16 +1,20 @@
 # clipboard-box
 
-Tiny top-bar clipboard vault for **macOS**, with the original lightweight
-**GNOME** screenshot extension still included.
+Top-bar clipboard vault for both **macOS** and **GNOME**.
 
 On macOS, clipboard-box watches clipboard changes, captures screenshots directly
 into its own app storage, stores each entry in a local plaintext history, then
 clears the system pasteboard after the copy is saved. Text, images, screenshots,
 and other pasteboard payloads are kept in the scrollable menu-bar popover.
 
+On GNOME, a top-bar indicator keeps a persistent history of the text and images
+you copy, lists your recent screenshots, and can capture a new Area/Screen
+screenshot on the spot. Click any entry to copy it back, then paste with
+`Ctrl+V`.
+
 ```
 macos/    Swift + SwiftUI MenuBarExtra app (macOS 13+)
-linux/    GNOME Shell Extension, GJS / ESM (GNOME 45+), screenshots only
+linux/    GNOME Shell Extension, GJS / ESM (GNOME 45+)
 ```
 
 ## macOS
@@ -55,13 +59,80 @@ ClipboardBox's Application Support folder.
 
 ## Linux (GNOME)
 
-The GNOME extension is still the original screenshot picker. It does not yet
-include the encrypted clipboard vault because GNOME Shell extensions do not have
-native Keychain/CryptoKit equivalents; that would need a small native helper or
-an explicit dependency on a system encryption tool.
+The GNOME extension is a clipboard vault: a top-panel indicator that keeps a
+persistent history of the text and images you copy, lists your recent
+screenshots, and can capture a new screenshot from the popup.
+
+- **Clipboard history** — the extension watches for clipboard changes (via the
+  compositor's selection-owner signal) and records copied text and PNG images,
+  deduplicated by content, newest first (up to 200 entries by default). Click a
+  row to copy that item back onto the clipboard, then paste with `Ctrl+V`. Each
+  row has **pin** (keep it at the top, exempt from the history cap and expiry)
+  and **delete** buttons. Content flagged by a password manager is ignored and
+  never stored.
+- **Search** — the box at the top of the popup filters the history and
+  screenshots as you type; the popup focuses it on open, so you can just start
+  typing.
+- **Pause** — the **Pause monitoring** toggle stops recording new clipboard
+  content (an incognito mode) without disabling the extension.
+- **Screenshots** — the popup lists the newest PNGs in `~/Pictures/Screenshots`
+  (where GNOME's `PrtScn` saves), each one click-to-copy.
+- **Capture** — the **Area** and **Screen** buttons capture through GNOME's own
+  screenshot service into `~/Pictures/Screenshots`, then add the shot to the
+  history and copy it to the clipboard.
+
+### Pasting into terminal apps
+
+Clicking a row puts the real PNG bytes on the clipboard as `image/png`, which GUI
+apps (GIMP, browsers, chat clients) paste directly. Terminal programs can't read an
+X11/Wayland selection themselves — they shell out to a helper binary — so for
+`Ctrl+V` image paste inside a terminal (Claude Code, editors) you need:
+
+```sh
+sudo apt install xclip          # X11
+sudo apt install wl-clipboard   # Wayland
+```
+
+If neither is installed, the extension says so once in a notification; without one,
+clicking an image row appears to work but pasting into a terminal does nothing.
+
+Every image and screenshot row also has a **link** button that copies the file's
+*path* as plain text instead of its bytes. That needs no helper binary at all and
+works over SSH — Claude Code turns a pasted path ending in `.png`/`.jpg`/`.gif`/
+`.webp` into a real image attachment. Path copies are not added to the history.
+
+### Preferences
+
+Open settings with `gnome-extensions prefs clipboard-box@dfxe.github.io` (or via
+the Extensions app). You can configure:
+
+- **Maximum entries** and **auto-expire after (days)** — bound the history by
+  count and age; pinned entries survive both.
+- **Store copied images** and **max copied-image size** — control what passive
+  clipboard images get stored. Explicit Area/Screen captures are always kept.
+- **Screenshots folder** — where captures are saved and which folder is watched
+  (blank = `~/Pictures/Screenshots`).
+- **Pause monitoring**.
+- **Keyboard shortcuts** — open the menu, capture area, capture screen. Type an
+  accelerator such as `<Super><Shift>V`; leave a field blank to disable it. No
+  shortcuts are bound by default.
+
+History is stored as plaintext under `~/.local/share/clipboard-box/`
+(`vault.json` plus `images/`), written owner-only (`0600`/`0700`). Like the
+current macOS build, it is **not encrypted** — GNOME Shell extensions have no
+native Keychain/CryptoKit equivalent, so at-rest encryption via libsecret/GNOME
+Keyring is left as future work (there is an inert **Encrypt history at rest**
+toggle in preferences reserved for it). Don't copy secrets you wouldn't want
+written to disk (password-manager content is already skipped, and you can flip
+on **Pause monitoring** before copying something sensitive).
 
 Requires GNOME Shell 45 or later (Ubuntu 23.10+, Fedora 39+, current
-Debian/Arch). No build step.
+Debian/Arch). No build step, but the bundled GSettings schema must be compiled
+once (and again whenever it changes):
+
+```sh
+glib-compile-schemas "linux/clipboard-box@dfxe.github.io/schemas/"
+```
 
 ```sh
 mkdir -p ~/.local/share/gnome-shell/extensions
@@ -81,5 +152,18 @@ Enable it:
 gnome-extensions enable clipboard-box@dfxe.github.io
 ```
 
-A camera icon appears in the top panel. Take a screenshot with `PrtScn`, click
-the icon, click an entry, paste with `Ctrl+V`.
+A clipboard icon appears in the top panel. Copy text or an image and it shows up
+under **Clipboard history**; click any entry to copy it back. Use **Area** /
+**Screen** to grab a screenshot, or press `PrtScn` and it appears under
+**Screenshots**.
+
+### Testing without logging out
+
+On Wayland you can try the extension in a nested Shell instead of re-logging:
+
+```sh
+dbus-run-session -- gnome-shell --nested --wayland
+```
+
+Enable it inside that session and watch logs with
+`journalctl -f -o cat | grep -i clipboard`.

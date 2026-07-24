@@ -5,17 +5,26 @@ import GLib from 'gi://GLib';
 const MAX_ENTRIES = 10;
 const DEBOUNCE_MS = 200;
 
-function screenshotsDir() {
+// The default folder GNOME's PrtScn saves into. A blank screenshots-dir setting
+// falls back here; a non-empty one overrides it.
+export function defaultScreenshotsDir() {
     const pictures = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES)
         ?? GLib.get_home_dir();
     return GLib.build_filenamev([pictures, 'Screenshots']);
 }
 
+export function resolveScreenshotsDir(settings) {
+    const custom = settings ? settings.get_string('screenshots-dir') : '';
+    return custom && custom.length > 0 ? custom : defaultScreenshotsDir();
+}
+
 export const ScreenshotStore = GObject.registerClass({
     Signals: { 'changed': {} },
 }, class ScreenshotStore extends GObject.Object {
-    _init() {
+    _init(settings) {
         super._init();
+        // super._init() takes no props, so `settings` stays our own param.
+        this._settings = settings ?? null;
         this._entries = [];
         this._monitor = null;
         this._refreshSourceId = 0;
@@ -27,7 +36,7 @@ export const ScreenshotStore = GObject.registerClass({
     }
 
     start() {
-        const dirPath = screenshotsDir();
+        const dirPath = resolveScreenshotsDir(this._settings);
         this._dir = Gio.File.new_for_path(dirPath);
 
         if (!this._dir.query_exists(null)) {
@@ -56,6 +65,20 @@ export const ScreenshotStore = GObject.registerClass({
         }
         this._dir = null;
         this._entries = [];
+    }
+
+    // Re-point at a (possibly) new folder after the screenshots-dir setting
+    // changes, without tearing the store down.
+    restart() {
+        if (this._refreshSourceId) {
+            GLib.source_remove(this._refreshSourceId);
+            this._refreshSourceId = 0;
+        }
+        if (this._monitor) {
+            this._monitor.cancel();
+            this._monitor = null;
+        }
+        this.start();
     }
 
     _scheduleReload() {
