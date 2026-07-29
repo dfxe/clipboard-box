@@ -9,7 +9,9 @@ final class ScreenshotCache {
     init(limit: Int = 10) {
         self.limit = limit
         let support = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
         dir = support
             .appendingPathComponent("clipboard-box", isDirectory: true)
             .appendingPathComponent("cache", isDirectory: true)

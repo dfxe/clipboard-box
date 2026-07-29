@@ -26,9 +26,11 @@
 
 .cb-scroll {
     /* max-height is set inline per-monitor in _syncScrollHeight; keep a stable
-       width so the popup doesn't jump around as the history changes. */
-    min-width: 360px;
-    max-width: 560px;
+       width so the popup doesn't jump around as the history changes. Wider than
+       a plain history list needed, to fit a two-line result plus the
+       right-aligned action hint without ellipsizing the title too early. */
+    min-width: 420px;
+    max-width: 640px;
 }
 
 .cb-capture-btn {
@@ -37,7 +39,7 @@
 
 .cb-search {
     margin: 4px 0;
-    min-width: 360px;
+    min-width: 420px;
 }
 
 /* Per-row Pin / Delete actions, vertically centred against the thumbnail and
@@ -60,4 +62,94 @@
 
 .cb-row-btn.cb-pinned {
     opacity: 1;
+}
+
+/* Copy confirmation, played on the row you clicked (see Indicator._flash).
+   transition-duration has to sit on the base class as well, or the highlight
+   would snap back instead of fading out when cb-copied is removed. */
+.cb-row {
+    border-radius: 6px;
+    padding: 2px;
+    transition-duration: 180ms;
+}
+
+.cb-row.cb-copied {
+    background-color: rgba(53, 132, 228, 0.28);
+}
+
+/* Command-bar selection. Key focus never leaves the search entry, so the
+   highlight is drawn by us (see Indicator._setSelected) rather than coming from
+   the menu's own focus handling. Deliberately weaker than .cb-copied, which has
+   to read as a distinct event on top of a row that may already be selected. */
+.cb-row.cb-selected {
+    background-color: rgba(128, 128, 128, 0.22);
+}
+
+/* The calculator's result. Bigger and monospaced so a number reads as an answer
+   rather than as one more search hit. */
+.cb-answer {
+    font-size: 1.25em;
+    font-family: monospace;
+}
+
+/* Right-aligned action hint on a result row, e.g. "Enter". */
+.cb-accel {
+    font-size: 0.8em;
+    color: inherit;
+    opacity: 0.45;
+    margin-left: 8px;
+}
+
+/* A literal character standing in for a thumbnail (emoji, symbols). Sized to
+   match the 32px symbolic icons it sits alongside. Noto Color Emoji is listed
+   explicitly because the theme's default font has only monochrome coverage. */
+.cb-glyph {
+    font-size: 26px;
+    font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    width: 32px;
+    height: 32px;
+    text-align: center;
+}
+
+/* Applied next to .cb-hint, whose 0.6 opacity it lifts while the flash is up. */
+.cb-hint-ok {
+    color: #62a0ea;
+    opacity: 1;
+}
+
+/* Live readout that follows the pointer during a colour pick. This one
+   deliberately breaks the `color: inherit` rule above: that exists so text
+   inside the themed popup survives a light theme, but this floats over arbitrary
+   wallpaper and window content, so it has to carry its own contrast. GNOME's own
+   .screenshot-ui-tooltip is hardcoded for exactly the same reason. */
+.cb-pick-tip {
+    background-color: rgba(0, 0, 0, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 6px 12px;
+    spacing: 8px;
+    color: #ffffff;
+}
+
+.cb-pick-hex {
+    font-family: monospace;
+    font-size: 1.05em;
+    font-weight: bold;
+}
+
+/* background-color is set inline, once per sampled pixel. */
+.cb-pick-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* Vault-row swatch for #rrggbb text entries. Sits alongside .cb-thumb, which
+   supplies the radius and right margin; 32px matches the icon it replaces. The
+   border is neutral grey so it reads against light and dark themes alike. */
+.cb-swatch {
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(128, 128, 128, 0.55);
 }

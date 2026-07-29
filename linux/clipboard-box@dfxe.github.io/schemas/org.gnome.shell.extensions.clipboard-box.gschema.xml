@@ -54,6 +54,73 @@
       <description>Set once the missing xclip/wl-paste notification has been shown, so it is not repeated.</description>
     </key>
 
+    <key name="snippets" type="as">
+      <default>[]</default>
+      <summary>Saved snippets</summary>
+      <description>One JSON object per snippet: {id, keyword, label, body, uses}. Edited in the preferences window; the body may contain {date}, {time}, {clipboard}, {uuid} and {cursor} placeholders.</description>
+    </key>
+
+    <key name="quicklinks" type="as">
+      <default>[]</default>
+      <summary>Quicklinks</summary>
+      <description>One JSON object per link: {id, keyword, name, url, uses}. A {query} token in the URL is replaced with the text typed after the keyword.</description>
+    </key>
+
+    <key name="quicklinks-seeded" type="b">
+      <default>false</default>
+      <summary>Default quicklinks have been seeded</summary>
+      <description>Set once the built-in quicklinks have been written, so deleting them all keeps them deleted.</description>
+    </key>
+
+    <key name="search-url" type="s">
+      <default>'https://duckduckgo.com/?q={query}'</default>
+      <summary>Fallback web search</summary>
+      <description>Used by the "Search the web for…" result when no other source matched. {query} is replaced with the typed text.</description>
+    </key>
+
+    <key name="emoji-recents" type="as">
+      <default>[]</default>
+      <summary>Recently used emoji</summary>
+      <description>Most recent first, capped at 32. Used to break ties when ranking emoji search results.</description>
+    </key>
+
+    <key name="currency-enabled" type="b">
+      <default>false</default>
+      <summary>Enable currency conversion</summary>
+      <description>Off by default. When on, the calculator can convert between currencies, which requires fetching exchange rates over the network — the only part of this extension that makes a network request.</description>
+    </key>
+
+    <key name="currency-api-url" type="s">
+      <default>'https://api.frankfurter.app/latest?from=USD'</default>
+      <summary>Exchange rate endpoint</summary>
+      <description>Fetched at most twice a day, and only when a currency conversion is actually typed. Results are cached in ~/.local/share/clipboard-box/rates.json.</description>
+    </key>
+
+    <key name="auto-paste" type="b">
+      <default>true</default>
+      <summary>Paste after copying</summary>
+      <description>When on, activating a result also sends Ctrl+V to the window that had focus, so the content lands where you were working instead of only on the clipboard.</description>
+    </key>
+
+    <key name="auto-paste-delay-ms" type="i">
+      <default>120</default>
+      <range min="0" max="1000"/>
+      <summary>Delay before the synthetic paste</summary>
+      <description>Milliseconds to wait after the popup closes before sending Ctrl+V, so focus has returned to the target window. Raise this if pastes land in the wrong place.</description>
+    </key>
+
+    <key name="paste-shortcut-terminals" type="b">
+      <default>true</default>
+      <summary>Use Ctrl+Shift+V for terminals</summary>
+      <description>Terminal emulators bind paste to Ctrl+Shift+V rather than Ctrl+V. When on, the focused window's class is matched against paste-shift-classes to decide which to send.</description>
+    </key>
+
+    <key name="paste-shift-classes" type="as">
+      <default>['gnome-terminal-server','org.gnome.Terminal','org.gnome.Ptyxis','Ptyxis','org.gnome.Console','kgx','kitty','Alacritty','konsole','foot','org.wezfurlong.wezterm','com.mitchellh.ghostty','xterm','urxvt','rxvt','st-256color','Terminator','tilix','contour','WezTerm']</default>
+      <summary>Window classes that paste with Ctrl+Shift+V</summary>
+      <description>Matched case-insensitively against the focused window's WM_CLASS (app ID on Wayland). There is no way to ask a window what its paste binding is, so this list is the mechanism.</description>
+    </key>
+
     <key name="toggle-menu" type="as">
       <default>[]</default>
       <summary>Open the clipboard menu</summary>
@@ -70,6 +137,24 @@
       <default>[]</default>
       <summary>Capture a full-screen screenshot</summary>
       <description>Keyboard shortcut that captures the whole screen.</description>
+    </key>
+
+    <key name="pick-color" type="as">
+      <default>[]</default>
+      <summary>Pick a color from the screen</summary>
+      <description>Keyboard shortcut that starts the screen color picker.</description>
+    </key>
+
+    <key name="open-snippets" type="as">
+      <default>[]</default>
+      <summary>Open the snippet picker</summary>
+      <description>Keyboard shortcut that opens the popup ready to search snippets.</description>
+    </key>
+
+    <key name="open-emoji" type="as">
+      <default>[]</default>
+      <summary>Open the emoji picker</summary>
+      <description>Keyboard shortcut that opens the popup ready to search emoji and symbols.</description>
     </key>
 
   </schema>

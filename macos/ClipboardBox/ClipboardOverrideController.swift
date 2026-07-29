@@ -17,7 +17,9 @@ final class ClipboardOverrideController {
     }
 
     private func start() {
-        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true]
+        // takeUnretainedValue, not takeRetained: this is a constant the
+        // framework owns, so claiming a reference here over-releases it.
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let isTrusted = AXIsProcessTrustedWithOptions(options)
 
         let mask = 1 << CGEventType.keyDown.rawValue
@@ -66,6 +68,19 @@ final class ClipboardOverrideController {
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // macOS disables a tap whose callback overruns the system timeout, and
+        // it never re-enables one on its own. Without this, Cmd-V interception
+        // and the screenshot shortcuts stay dead until the app is relaunched —
+        // and because a dead tap is also the only state in which the native
+        // screenshot shortcuts work again, the failure reads as a puzzle rather
+        // than a fault.
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let eventTap {
+                CGEvent.tapEnable(tap: eventTap, enable: true)
+            }
+            return nil
+        }
+
         guard type == .keyDown else {
             return Unmanaged.passUnretained(event)
         }

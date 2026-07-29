@@ -50,6 +50,11 @@ struct PopoverView: View {
 
                 Spacer()
 
+                Toggle("Pause", isOn: $store.isPaused)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .help("Stop recording the clipboard without quitting")
+
                 Button {
                     store.captureScreenshot(mode: .interactive)
                 } label: {

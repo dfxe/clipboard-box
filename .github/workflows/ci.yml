@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    name: GNOME extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # gjs runs the tests; libglib2.0-bin provides glib-compile-schemas.
+      - name: Install gjs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gjs libglib2.0-bin
+
+      # A schema that does not compile makes enable() throw at runtime with a
+      # message that points nowhere near the actual mistake.
+      - name: Validate the GSettings schema
+        run: glib-compile-schemas --strict --dry-run "linux/clipboard-box@dfxe.github.io/schemas/"
+
+      - name: Parse-check every module
+        run: ./linux/tests/parse-check.sh
+
+      - name: Unit tests
+        run: ./linux/tests/run.sh
+
+  macos:
+    name: macOS app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # There is no test suite on this side yet, so compiling is the check.
+      # build.sh drives swiftc directly — no Xcode project, no SwiftPM manifest.
+      - name: Build
+        run: ./build.sh
+        working-directory: macos

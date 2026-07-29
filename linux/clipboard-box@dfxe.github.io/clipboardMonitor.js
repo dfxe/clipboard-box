@@ -96,18 +96,28 @@ export const ClipboardMonitor = GObject.registerClass({
         if (this._paused()) return;
 
         const clipboard = St.Clipboard.get_default();
-        const mimetypes = clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? [];
-        if (isSensitive(mimetypes)) return;
+        // Cheap bail before we bother reading anything.
+        if (isSensitive(clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? [])) return;
 
         const storeImages = this._settings ? this._settings.get_boolean('store-images') : true;
 
         // Prefer text (macOS reads .string first), fall back to a PNG image.
         clipboard.get_text(St.ClipboardType.CLIPBOARD, (_clip, text) => {
+            // Ownership can flip between the check above and this callback: the
+            // content we were handed may belong to a *different* owner than the
+            // one we vetted. Re-read the types and judge them against the
+            // content we actually got, or a password manager that grabs the
+            // clipboard mid-read gets its secret persisted.
+            const mimetypes = clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? [];
+            if (isSensitive(mimetypes)) return;
+
             if (text && text.trim().length > 0) {
                 this._ingestText(text);
             } else if (storeImages && mimetypes.includes('image/png')) {
                 clipboard.get_content(St.ClipboardType.CLIPBOARD, 'image/png',
                     (_c, glibBytes) => {
+                        if (isSensitive(clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? []))
+                            return;
                         const data = glibBytes?.get_data();
                         if (data && data.length > 0) this._ingestImage(data);
                     });
@@ -118,7 +128,10 @@ export const ClipboardMonitor = GObject.registerClass({
     _ingestText(text) {
         const bytes = new TextEncoder().encode(text);
         const fp = fingerprintFor('text', bytes);
-        if (this._ignored.has(fp)) return;
+        // Consuming, not a peek: the entry exists to swallow exactly one bounce
+        // of our own write. Leaving it in the set means the user copying that
+        // same text by hand later is silently dropped from history.
+        if (this._ignored.delete(fp)) return;
         this.emit('captured', {
             kind: 'text',
             text,
@@ -136,7 +149,7 @@ export const ClipboardMonitor = GObject.registerClass({
         if (cap > 0 && data.length > cap) return;
 
         const fp = fingerprintFor('image', data);
-        if (this._ignored.has(fp)) return;
+        if (this._ignored.delete(fp)) return;
         this.emit('captured', {
             kind: 'image',
             bytes: data,

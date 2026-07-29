@@ -10,62 +10,64 @@ import Pango from 'gi://Pango';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import { ScreenshotStore, resolveScreenshotsDir } from './screenshotStore.js';
 import { ClipboardMonitor } from './clipboardMonitor.js';
-import { VaultStore, collapseText, fingerprintFor } from './vaultStore.js';
+import { VaultStore } from './vaultStore.js';
 import * as Capture from './capture.js';
+import * as ColorPicker from './colorPicker.js';
+import * as Paste from './paste.js';
+import * as Currency from './currency.js';
+import { runSearch, totalResults } from './searchRegistry.js';
+import { historyProvider, screenshotProvider } from './historyProvider.js';
+import { answerProvider } from './answerProvider.js';
+import { quicklinkProvider } from './quicklinkProvider.js';
+import { snippetProvider } from './snippetProvider.js';
+import { emojiProvider } from './emojiProvider.js';
+import {
+    seedQuicklinksOnce, loadSnippets, saveSnippets, loadQuicklinks, newId,
+} from './configStore.js';
+import { ingestText } from './clipboardUtil.js';
 
-const KEYBINDINGS = ['toggle-menu', 'capture-area', 'capture-full'];
+const KEYBINDINGS = [
+    'toggle-menu', 'capture-area', 'capture-full', 'pick-color',
+    'open-snippets', 'open-emoji',
+];
 
-function formatBytes(n) {
-    if (!n || n < 1024) return `${n ?? 0} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
+// Search sources, in the order their sections appear in the popup. The tools
+// added on top of clipboard history slot in ahead of it, Raycast-style: an
+// answer or an exact snippet match is almost always what you meant, and history
+// is what you fall back to browsing.
+const PROVIDERS = [
+    answerProvider,
+    quicklinkProvider,
+    snippetProvider,
+    emojiProvider,
+    historyProvider,
+    screenshotProvider,
+];
 
-function relativeAge(iso) {
-    const then = GLib.DateTime.new_from_iso8601(iso, null);
-    if (!then) return '';
-    const secs = Math.max(0, Math.floor(GLib.DateTime.new_now_local().difference(then) / 1e6));
-    if (secs < 60) return `${secs}s`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}m`;
-    if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
-    return `${Math.floor(secs / 86400)}d`;
-}
+// How long the copied-row flash stays up. Activating a row closes the popup, so
+// that path only needs long enough to register; a button that leaves the popup
+// open holds the state until it would start to feel stuck.
+const FLASH_CLOSE_MS = 420;
+const FLASH_REVERT_MS = 1100;
 
-// Read a PNG off disk without blocking the compositor, then copy it to the
-// clipboard. Large screenshots would otherwise stall the Shell if read
-// synchronously on the main thread.
-function copyPngFile(path) {
-    const base = GLib.path_get_basename(path);
-    Gio.File.new_for_path(path).load_contents_async(null, (file, res) => {
-        try {
-            const [ok, bytes] = file.load_contents_finish(res);
-            if (!ok) {
-                Main.notifyError('clipboard-box', `Could not read ${base}`);
-                return;
-            }
-            St.Clipboard.get_default().set_content(
-                St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
-            Main.notify('clipboard-box', `Copied ${base}`);
-        } catch (e) {
-            Main.notifyError('clipboard-box', e.message ?? String(e));
-        }
-    });
-}
+// Typing rebuilds the whole list, and with several providers scoring their
+// candidates that is worth coalescing across a fast burst of keystrokes.
+const SEARCH_DEBOUNCE_MS = 80;
 
-// Terminal programs can't read image/png off the clipboard without a helper
-// binary, but every one of them understands a path — Claude Code turns a pasted
-// path matching /\.(png|jpe?g|gif|webp)$/ straight into an image attachment.
-// Tell the monitor to ignore the write so our own path copies don't come back in
-// as new text history (same trick _recopy uses).
-function copyPathText(path, monitor) {
-    monitor?.ignore(fingerprintFor('text', new TextEncoder().encode(path)));
-    St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, path);
-    Main.notify('clipboard-box', `Copied path to ${GLib.path_get_basename(path)}`);
-}
+// How far Page Up/Down jump through the result list.
+const PAGE_STEP = 8;
+
+// Breathing room added to the measured chrome height, and the value used before
+// the menu has ever been allocated (the first open).
+const CHROME_PADDING_PX = 24;
+const CHROME_FALLBACK_PX = 260;
+
+const SEARCH_HINT = 'Search, calculate, or type a keyword…';
 
 function revealInFiles(path) {
     try {
@@ -83,10 +85,40 @@ function setScrollChild(scrollView, child) {
     else scrollView.add_actor(child);
 }
 
+// Scroll `actor` into view. The Shell used to export this from misc/util.js but
+// no longer does (extensions that need it, like the shipped ubuntu-dock, carry
+// their own copy), so here is ours. Same 45-vs-46 split as setScrollChild:
+// St.ScrollView.vscroll was deprecated in favour of a direct .vadjustment.
+function ensureVisible(scrollView, actor) {
+    const adj = scrollView.vadjustment ?? scrollView.vscroll?.adjustment;
+    if (!adj) return;
+
+    // Allocation boxes are parent-relative, so walk up to the scroll view
+    // accumulating offsets to get the actor's position within the scrolled area.
+    let box;
+    try { box = actor.get_allocation_box(); }
+    catch (_) { return; }
+    let y1 = box.y1;
+    let y2 = box.y2;
+    for (let parent = actor.get_parent(); parent && parent !== scrollView; parent = parent.get_parent()) {
+        const pbox = parent.get_allocation_box();
+        y1 += pbox.y1;
+        y2 += pbox.y1;
+    }
+
+    const { value, pageSize, upper } = adj;
+    if (y1 < value) adj.set_value(Math.max(0, y1));
+    else if (y2 > value + pageSize) adj.set_value(Math.min(Math.max(0, upper - pageSize), y2 - pageSize));
+}
+
 // A single-line title that ellipsizes instead of forcing the popup wider (the
 // scroll region is width-capped, so long text would otherwise clip on the right).
-function nameLabel(text) {
-    const label = new St.Label({ text, style_class: 'cb-name', x_expand: true });
+function nameLabel(text, extraClass) {
+    const label = new St.Label({
+        text,
+        style_class: extraClass ? `cb-name ${extraClass}` : 'cb-name',
+        x_expand: true,
+    });
     label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
     return label;
 }
@@ -112,39 +144,258 @@ class Indicator extends PanelMenu.Button {
         this._screenshots = null;
         this._monitor = null;
         this._settings = null;
+        this._uuid = null;
 
         this._scrollView = null;
         this._listSection = null;
         this._searchEntry = null;
+        this._capturedId = 0;
         this._pauseToggle = null;
         this._clearItem = null;
         this._revealItem = null;
+        this._quitItem = null;
         this._filter = '';
         this._pausedChangedId = 0;
+        this._pendingFlash = null;
+        this._flashId = 0;
+        this._searchDebounceId = 0;
+        // Lazily filled from GSettings; see invalidateConfigCache().
+        this._snippetCache = null;
+        this._quicklinkCache = null;
+        // Rebuilds are held while a row is activating; see _suspendRefresh().
+        this._refreshSuspended = false;
+        this._refreshPending = null;
+
+        // Command-bar selection. `_rows` is the flat, display-ordered list of
+        // activatable rows (section headers excluded) that the arrow keys walk;
+        // `_selected` indexes into it. Selection is drawn by us rather than
+        // handed to the menu's own key focus, which stays on the search entry.
+        this._rows = [];
+        this._selected = 0;
+        this._pendingPaste = null;
+        this._focusWmClass = null;
+        this._scope = null;
 
         this.add_child(new St.Icon({
             icon_name: 'edit-paste-symbolic',
             style_class: 'system-status-icon',
         }));
 
+        // Command-bar keys have to be caught here rather than on the search
+        // entry, because PopupMenuManager connects its own 'captured-event' to
+        // this same actor and closes the menu on Escape (popupMenu.js
+        // _onCapturedEvent) — the capture phase runs before the focused entry
+        // ever sees the key. Connecting in _init() puts us ahead of the manager
+        // in connection order, since the manager only connects when
+        // Main.panel.addToStatusArea() runs, which is after we are constructed.
+        this._capturedId = this.menu.actor.connect('captured-event',
+            (_actor, event) => this._onCapturedEvent(event));
+
         // Cap the list height against the current monitor whenever the popup
         // opens, so a long history scrolls instead of overflowing the screen.
         this.menu.connect('open-state-changed', (_menu, isOpen) => {
             if (isOpen) {
+                // Sample the paste target now, while it is still unambiguous —
+                // by the time a row is activated the focus window may have
+                // moved, and we need its class to pick Ctrl+V vs Ctrl+Shift+V.
+                this._focusWmClass =
+                    global.display.get_focus_window()?.get_wm_class() ?? null;
+                // Rebuild unconditionally. The list is otherwise only rebuilt on
+                // a store change or a keystroke, so a popup reopened after a
+                // scoped session would still be showing that tool's rows.
+                this.refresh({ resetSelection: true });
                 this._syncScrollHeight();
                 // Focus the search box so you can filter by just typing.
                 if (this._searchEntry) this._searchEntry.grab_key_focus();
-            } else if (this._searchEntry) {
-                this._searchEntry.set_text('');
+            } else {
+                // Drop any in-flight copy flash, so a row we closed on early
+                // isn't still lit up the next time the popup opens.
+                this._cancelFlash();
+                // Before clearing the entry, not after: set_text('') fires
+                // text-changed synchronously, which refreshes — and that
+                // refresh must not run with _scope still pointing at a tool.
+                this._scope = null;
+                this._filter = '';
+                if (this._searchEntry) {
+                    this._searchEntry.set_text('');
+                    this._searchEntry.hint_text = SEARCH_HINT;
+                }
+                // A paste armed by the row we just activated fires here, once
+                // the popup is really gone and focus is back on the target
+                // window. Anything still pending from an abandoned interaction
+                // is dropped.
+                this._firePendingPaste();
             }
         });
     }
 
-    setContext({ vault, screenshots, monitor, settings }) {
+    // Open the popup restricted to one tool, for the snippet/emoji shortcuts.
+    // Scoping rather than pre-filling a prefix character keeps the query box
+    // holding only what the user actually typed.
+    openForTool(scope) {
+        this._scope = scope;
+        this._filter = '';
+        if (this._searchEntry) {
+            this._searchEntry.set_text('');
+            this._searchEntry.hint_text = scope === 'emoji'
+                ? 'Search emoji and symbols…'
+                : 'Search snippets…';
+        }
+        // Refresh here as well as in the open handler: when the popup is
+        // already open, menu.open() is a no-op and never fires it.
+        this.refresh({ resetSelection: true });
+        this.menu.open(BoxPointer.PopupAnimation.FULL);
+    }
+
+    _clearScope() {
+        if (!this._scope) return false;
+        this._scope = null;
+        if (this._searchEntry) this._searchEntry.hint_text = SEARCH_HINT;
+        this.refresh({ resetSelection: true });
+        return true;
+    }
+
+    _onCapturedEvent(event) {
+        if (event.type() !== Clutter.EventType.KEY_PRESS) return Clutter.EVENT_PROPAGATE;
+
+        // Ignore anything held down but Lock/NumLock, so Ctrl+A and friends
+        // still reach the entry untouched.
+        const state = event.get_state() &
+            ~(Clutter.ModifierType.LOCK_MASK | Clutter.ModifierType.MOD2_MASK) &
+            Clutter.ModifierType.MODIFIER_MASK;
+        if (state !== 0) return Clutter.EVENT_PROPAGATE;
+
+        switch (event.get_key_symbol()) {
+        case Clutter.KEY_Down:
+            this._moveSelection(1);
+            return Clutter.EVENT_STOP;
+        case Clutter.KEY_Up:
+            this._moveSelection(-1);
+            return Clutter.EVENT_STOP;
+        case Clutter.KEY_Page_Down:
+            this._moveSelection(PAGE_STEP);
+            return Clutter.EVENT_STOP;
+        case Clutter.KEY_Page_Up:
+            this._moveSelection(-PAGE_STEP);
+            return Clutter.EVENT_STOP;
+        case Clutter.KEY_Return:
+        case Clutter.KEY_KP_Enter:
+        case Clutter.KEY_ISO_Enter:
+            if (this._rows.length === 0) return Clutter.EVENT_PROPAGATE;
+            // Act on the selection even if a debounced rebuild is still queued,
+            // so a fast type-then-Enter can't fire against a stale list.
+            this._flushSearchDebounce();
+            this._activateSelected();
+            return Clutter.EVENT_STOP;
+        case Clutter.KEY_Escape:
+            // Escape peels one layer at a time: query, then tool scope, then
+            // the popup itself. Propagating is what lets the menu manager close.
+            if (this._searchEntry && this._searchEntry.get_text() !== '') {
+                this._searchEntry.set_text('');
+                return Clutter.EVENT_STOP;
+            }
+            if (this._clearScope()) return Clutter.EVENT_STOP;
+            return Clutter.EVENT_PROPAGATE;
+        default:
+            return Clutter.EVENT_PROPAGATE;
+        }
+    }
+
+    _snippets() {
+        this._snippetCache ??= loadSnippets(this._settings);
+        return this._snippetCache;
+    }
+
+    _quicklinks() {
+        this._quicklinkCache ??= loadQuicklinks(this._settings);
+        return this._quicklinkCache;
+    }
+
+    // Called from the changed::snippets / changed::quicklinks handlers, which
+    // fire both for prefs-window edits and for our own use-count bumps.
+    invalidateConfigCache() {
+        this._snippetCache = null;
+        this._quicklinkCache = null;
+    }
+
+    // Everything a provider needs to search and to act. Rebuilt per use so it
+    // always reflects the current stores.
+    _ctx() {
+        return {
+            vault: this._vault,
+            screenshots: this._screenshots,
+            monitor: this._monitor,
+            settings: this._settings,
+            // A thunk, not a table: resolving it can hit the network, and this
+            // context is rebuilt on every refresh — including the empty-query
+            // one that runs when the popup opens. calc.js calls it only once a
+            // query has parsed as a currency conversion, which is what the
+            // "fetches only when you type one" promise in the README rests on.
+            //
+            // Null unless the user opted into currency conversion. May resolve
+            // to a stale table; calc.js labels it with its age rather than
+            // hiding it.
+            rates: codes => Currency.ratesFor(this._settings, () => {
+                // Fresh rates arrived after the query was drawn — redraw so the
+                // answer stops saying "unavailable".
+                if (this.menu.isOpen) this.refresh();
+            }, codes),
+            // Both lists were being re-read from GSettings — get_strv plus a
+            // JSON.parse per entry — on every keystroke. They only change when
+            // the prefs window writes, which we already watch for.
+            snippets: this._snippets(),
+            quicklinks: this._quicklinks(),
+            requestPaste: opts => this._armPaste(opts),
+            saveSnippet: text => this._saveSnippet(text),
+            // Set when the popup was opened by a tool-specific shortcut; lets a
+            // provider list everything it has instead of waiting for a query.
+            scope: this._scope,
+        };
+    }
+
+    // Promote a history entry to a snippet. Deliberately unlabelled and without
+    // a keyword — naming it is a job for the preferences window, and demanding
+    // that here would turn a one-click action into a dialog.
+    _saveSnippet(text) {
+        if (!this._settings || !text) return null;
+        const body = text;
+        const snippets = loadSnippets(this._settings);
+        if (snippets.some(s => s.body === body))
+            return { message: 'Already a snippet' };
+        snippets.push({ id: newId(), keyword: '', label: '', body, uses: 0 });
+        saveSnippets(this._settings, snippets);
+        return { message: 'Saved as snippet' };
+    }
+
+    // A provider calls ctx.requestPaste() at the exact moment the clipboard
+    // actually holds its content — synchronously for text, from inside the file
+    // read for an image. We only note it here; the keystroke itself has to wait
+    // until the popup is gone and focus is back on the target window.
+    _armPaste(opts = {}) {
+        if (!this._settings?.get_boolean('auto-paste')) return;
+        this._pendingPaste = { leftPresses: 0, ...opts };
+        // The row that armed this may have closed the menu already (an image
+        // read can finish after the flash), in which case fire now.
+        if (!this.menu.isOpen) this._firePendingPaste();
+    }
+
+    _firePendingPaste() {
+        const pending = this._pendingPaste;
+        this._pendingPaste = null;
+        if (!pending) return;
+        Paste.pasteInto({
+            wmClass: this._focusWmClass,
+            settings: this._settings,
+            leftPresses: pending.leftPresses,
+        });
+    }
+
+    setContext({ vault, screenshots, monitor, settings, uuid }) {
         this._vault = vault;
         this._screenshots = screenshots;
         this._monitor = monitor;
         this._settings = settings;
+        this._uuid = uuid;
         this._buildMenu();
     }
 
@@ -198,52 +449,145 @@ class Indicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(this._revealItem);
 
+        // Unlike the vault/screenshot rows, this one doesn't override activate():
+        // PopupMenuBase's default close-on-activate is exactly what we want here.
+        this._quitItem = new PopupMenu.PopupMenuItem('Quit');
+        this._quitItem.connect('activate', () => this._quit());
+        this.menu.addMenuItem(this._quitItem);
+
         this.refresh();
     }
 
-    // Rebuild only the middle list from the current stores + search filter.
-    refresh() {
+    // An extension has no process to terminate, so Quit means "turn the
+    // extension off" — the same thing the Extensions app toggle does. Going
+    // through the Shell's own D-Bus method rather than Main.extensionManager
+    // keeps this on the public interface; either way it writes
+    // enabled-extensions/disabled-extensions, so it stays off across a reboot.
+    //
+    // Our own disable() runs as a *result* of that settings write, on a later
+    // main loop turn, which is what makes calling this from inside a click
+    // handler safe — nothing tears down this actor while the emission is still
+    // unwinding. The call is fire-and-forget for the same reason: any reply
+    // would land after we've been destroyed.
+    //
+    // Notify first, while we're still here to do it. Once the panel icon is
+    // gone there's no in-UI way back, so the notification has to carry it.
+    _quit() {
+        if (!this._uuid) return;
+        Main.notify('clipboard-box',
+            `Turned off. Re-enable with: gnome-extensions enable ${this._uuid}`);
+        Gio.DBus.session.call(
+            'org.gnome.Shell', '/org/gnome/Shell', 'org.gnome.Shell.Extensions',
+            'DisableExtension', new GLib.Variant('(s)', [this._uuid]),
+            null, Gio.DBusCallFlags.NONE, -1, null, null);
+    }
+
+    // Rebuild only the middle list by asking every provider for results at the
+    // current query, then laying them out as headed sections.
+    // `resetSelection` means "this is a new query, start at the top". It has to
+    // be passed explicitly: _rows below still holds the *previous* rebuild's
+    // rows, so a caller that just set _selected = 0 would have us read the old
+    // top row's id and then chase it into the new list.
+    refresh({ resetSelection = false } = {}) {
         if (!this._listSection) return;
+
+        // An activation is in flight. Rebuilding now would destroy the row that
+        // is about to show (or is showing) its ✓ confirmation — which is why
+        // "Copied answer" and "Saved as snippet" were invisible: both mutate a
+        // store, whose 'changed' signal lands here synchronously inside run().
+        // Remember the rebuild and let _resumeRefresh() run it.
+        if (this._refreshSuspended) {
+            this._refreshPending = {
+                resetSelection: (this._refreshPending?.resetSelection ?? false) || resetSelection,
+            };
+            return;
+        }
+
+        // Remember what was selected so a rebuild triggered by a background
+        // store change (a fresh copy landing) doesn't move the highlight out
+        // from under the user mid-keystroke.
+        const previousId = resetSelection
+            ? null
+            : this._rows[this._selected]?.result.id ?? null;
+
         this._listSection.removeAll();
+        this._rows = [];
 
-        const q = this._filter;
-        const allItems = this._vault ? this._vault.items : [];
-        const items = q
-            ? allItems.filter(it => `${it.title ?? ''} ${it.text ?? ''}`.toLowerCase().includes(q))
-            : allItems;
+        const ctx = this._ctx();
+        const providers = this._scope
+            ? PROVIDERS.filter(p => p.id === this._scope)
+            : PROVIDERS;
+        const groups = runSearch(providers, this._filter, ctx);
 
-        this._listSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Clipboard history'));
-        if (allItems.length === 0) {
-            this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                'Nothing copied yet — copy some text or an image', { reactive: false }));
-        } else if (items.length === 0) {
-            this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                'No matches', { reactive: false }));
-        } else {
-            for (const it of items) this._listSection.addMenuItem(this._makeVaultItem(it));
+        for (const group of groups) {
+            this._listSection.addMenuItem(
+                new PopupMenu.PopupSeparatorMenuItem(group.provider.title));
+
+            if (group.results.length === 0) {
+                this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
+                    group.emptyMessage, { reactive: false }));
+                continue;
+            }
+
+            for (const result of group.results) {
+                const row = this._makeResultRow(result);
+                this._listSection.addMenuItem(row.item);
+                this._rows.push(row);
+            }
         }
 
-        const allShots = this._screenshots ? this._screenshots.entries : [];
-        const shots = q
-            ? allShots.filter(p => GLib.path_get_basename(p).toLowerCase().includes(q))
-            : allShots;
-        this._listSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Screenshots'));
-        if (allShots.length === 0) {
+        // With a query, empty sections are hidden rather than each printing its
+        // own "No matches" — so say it once, for the whole bar.
+        if (this._filter !== '' && totalResults(groups) === 0) {
             this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                'No screenshots yet — press PrtScn', { reactive: false }));
-        } else if (shots.length === 0) {
-            this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                'No matches', { reactive: false }));
-        } else {
-            for (const path of shots) this._listSection.addMenuItem(this._makeScreenshotItem(path));
+                'No results', { reactive: false }));
         }
 
-        this._clearItem?.setSensitive(allItems.length > 0);
-        this._revealItem?.setSensitive(allShots.length > 0);
+        const restored = previousId === null
+            ? -1
+            : this._rows.findIndex(r => r.result.id === previousId);
+        this._setSelected(restored >= 0 ? restored : 0, { scroll: false });
+
+        const hasItems = this._vault ? this._vault.items.length > 0 : false;
+        const hasShots = this._screenshots ? this._screenshots.entries.length > 0 : false;
+        this._clearItem?.setSensitive(hasItems);
+        this._revealItem?.setSensitive(hasShots);
 
         // Content can change while the popup is open (a fresh copy triggers a
         // rebuild); re-apply the cap so the new scroll view is bounded too.
         if (this.menu.isOpen) this._syncScrollHeight();
+    }
+
+    // --- Selection -------------------------------------------------------
+    //
+    // Key focus stays on the search entry the whole time — moving it into the
+    // menu items would fight PopupMenuBase's own navigation and cost the entry
+    // its text cursor. So selection is ours to track and ours to draw.
+
+    _setSelected(index, { scroll = true } = {}) {
+        const clamped = this._rows.length === 0
+            ? 0
+            : Math.max(0, Math.min(index, this._rows.length - 1));
+
+        const previous = this._rows[this._selected];
+        if (previous && this._selected !== clamped)
+            previous.row.remove_style_class_name('cb-selected');
+
+        this._selected = clamped;
+
+        const current = this._rows[clamped];
+        if (!current) return;
+        current.row.add_style_class_name('cb-selected');
+        if (scroll && this._scrollView) ensureVisible(this._scrollView, current.item.actor);
+    }
+
+    _moveSelection(delta) {
+        if (this._rows.length === 0) return;
+        this._setSelected(this._selected + delta);
+    }
+
+    _activateSelected() {
+        this._rows[this._selected]?.item.activate();
     }
 
     _syncScrollHeight() {
@@ -252,29 +596,75 @@ class Indicator extends PanelMenu.Button {
         if (index < 0) index = Main.layoutManager.primaryIndex;
         const workArea = Main.layoutManager.getWorkAreaForMonitor(index);
         if (!workArea) return;
-        // Reserve space for the panel plus the fixed capture/search/pause rows
-        // and bottom actions that sit outside the scroll region, then let the
-        // list take whatever vertical space is left on this monitor.
-        const reserved = Main.panel.height + 260;
+        // Reserve space for the panel plus everything outside the scroll region.
+        // Measuring the fixed rows rather than hardcoding a number keeps this
+        // honest as chrome is added — the old constant was already drifting.
+        const reserved = Main.panel.height + this._chromeHeight();
         const maxHeight = Math.max(160, workArea.height - reserved);
         this._scrollView.style = `max-height: ${maxHeight}px;`;
+    }
+
+    // Height of every menu item except the one holding the scroll view. Falls
+    // back to a sane constant before the menu has been allocated, which is the
+    // case the very first time the popup opens.
+    _chromeHeight() {
+        const scrollParent = this._scrollView?.get_parent();
+        let total = 0;
+        for (const child of this.menu.box.get_children()) {
+            if (child === scrollParent) continue;
+            total += child.get_preferred_height(-1)[1];
+        }
+        return total > 0 ? total + CHROME_PADDING_PX : CHROME_FALLBACK_PX;
     }
 
     _makeSearchRow() {
         const item = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
         const entry = new St.Entry({
             style_class: 'cb-search',
-            hint_text: 'Search history…',
+            hint_text: SEARCH_HINT,
             can_focus: true,
             x_expand: true,
         });
+
         entry.clutter_text.connect('text-changed', () => {
-            this._filter = entry.get_text().toLowerCase();
-            this.refresh();
+            const text = entry.get_text();
+            // Every keystroke re-runs every provider and rebuilds every row, so
+            // coalesce a fast burst into one rebuild. A cleared box refreshes
+            // immediately — that path is cheap and the delay would be visible.
+            this._cancelSearchDebounce();
+            if (text === '') {
+                this._filter = '';
+                this.refresh({ resetSelection: true });
+                return;
+            }
+            this._searchDebounceId = GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT, SEARCH_DEBOUNCE_MS, () => {
+                    this._searchDebounceId = 0;
+                    this._filter = entry.get_text();
+                    // A new query means the old selection is meaningless; start
+                    // at the top so Enter always hits the best match.
+                    this.refresh({ resetSelection: true });
+                    return GLib.SOURCE_REMOVE;
+                });
         });
+
         this._searchEntry = entry;
         item.add_child(entry);
         return item;
+    }
+
+    _cancelSearchDebounce() {
+        if (!this._searchDebounceId) return;
+        GLib.source_remove(this._searchDebounceId);
+        this._searchDebounceId = 0;
+    }
+
+    // Apply a queued query now instead of waiting out the debounce.
+    _flushSearchDebounce() {
+        if (!this._searchDebounceId) return;
+        this._cancelSearchDebounce();
+        this._filter = this._searchEntry ? this._searchEntry.get_text() : '';
+        this.refresh({ resetSelection: true });
     }
 
     _makeCaptureRow() {
@@ -293,8 +683,15 @@ class Indicator extends PanelMenu.Button {
         });
         screen.connect('clicked', () => { this.menu.close(); this._capture('full'); });
 
+        const color = new St.Button({
+            label: 'Color', x_expand: true, can_focus: true,
+            style_class: 'cb-capture-btn button',
+        });
+        color.connect('clicked', () => { this.menu.close(); this._pickColor(); });
+
         box.add_child(area);
         box.add_child(screen);
+        box.add_child(color);
         item.add_child(box);
         return item;
     }
@@ -339,110 +736,267 @@ class Indicator extends PanelMenu.Button {
         });
     }
 
-    _makeVaultItem(it) {
-        const item = new PopupMenu.PopupBaseMenuItem({ activate: true });
-        const row = new St.BoxLayout({ vertical: false, x_expand: true });
+    _pickColor() {
+        ColorPicker.pickColor((hex, err) => {
+            if (err) {
+                Main.notifyError('clipboard-box', err.message ?? 'Color pick failed');
+                return;
+            }
+            // No hex and no error means Escape or a right click — stay as quiet
+            // as _capture() does about a cancelled SelectArea.
+            if (!hex) return;
+            this._ingestColor(hex);
+        });
+    }
 
-        let thumb;
-        if (it.kind === 'image' && it.imagePath) {
-            thumb = new St.Icon({
-                gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(it.imagePath) }),
-                icon_size: 64, style_class: 'cb-thumb',
-            });
-        } else {
-            thumb = new St.Icon({
-                icon_name: it.kind === 'text' ? 'text-x-generic-symbolic' : 'image-x-generic-symbolic',
-                icon_size: 32, style_class: 'cb-thumb',
+    // A pick can complete while the popup is closed, so unlike the row copies
+    // this one still notifies — there is no row to flash.
+    _ingestColor(hex) {
+        // No paste here: the picker runs with the popup closed, and typing a
+        // colour into whatever happens to have focus is not what anyone means
+        // by "pick a colour".
+        ingestText(hex, { ...this._ctx(), requestPaste: null }, { store: true, title: hex });
+        Main.notify('clipboard-box', `Copied ${hex}`);
+    }
+
+    // Confirm a copy on the row the user actually clicked: highlight the row,
+    // pop the thumbnail, and swap the hint line for a checkmark. `close` closes
+    // the popup once the flash has been seen — row activation used to close it
+    // instantly (see the activate() override below), which left no room for any
+    // feedback at all.
+    _flash({ item, row, hint, thumb, message, close = false }) {
+        this._cancelFlash();
+
+        const previousHint = hint.text;
+        row.add_style_class_name('cb-copied');
+        hint.text = `✓ ${message}`;
+        hint.add_style_class_name('cb-hint-ok');
+
+        if (St.Settings.get().enable_animations) {
+            thumb.remove_all_transitions();
+            // Without a pivot the icon would scale out of its top-left corner.
+            thumb.set_pivot_point(0.5, 0.5);
+            thumb.ease({
+                scale_x: 1.12, scale_y: 1.12,
+                duration: 110,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => thumb.ease({
+                    scale_x: 1, scale_y: 1,
+                    duration: 200,
+                    mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                }),
             });
         }
+
+        const flash = {
+            item,
+            destroyId: 0,
+            undo: () => {
+                row.remove_style_class_name('cb-copied');
+                hint.text = previousHint;
+                hint.remove_style_class_name('cb-hint-ok');
+                thumb.remove_all_transitions();
+                thumb.set_scale(1, 1);
+            },
+        };
+        // refresh() rebuilds the whole list on any store change; if that lands
+        // mid-flash these actors are already gone, so stop trying to restore
+        // them. The pending close still runs.
+        flash.destroyId = item.connect('destroy', () => {
+            flash.undo = null;
+            flash.destroyId = 0;
+        });
+        this._pendingFlash = flash;
+
+        this._flashId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            close ? FLASH_CLOSE_MS : FLASH_REVERT_MS, () => {
+                this._flashId = 0;
+                this._cancelFlash();
+                if (close) this.menu.close(BoxPointer.PopupAnimation.FULL);
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _cancelFlash() {
+        if (this._flashId) {
+            GLib.source_remove(this._flashId);
+            this._flashId = 0;
+        }
+        const flash = this._pendingFlash;
+        this._pendingFlash = null;
+        if (flash) {
+            if (flash.destroyId) flash.item.disconnect(flash.destroyId);
+            flash.undo?.();
+        }
+        // Whatever ended the flash — timeout, a new one, or the popup closing —
+        // rebuilds are owed again.
+        this._resumeRefresh();
+    }
+
+    // Hold list rebuilds while a row is being activated and its confirmation
+    // shown, then apply whatever was requested in the meantime.
+    _suspendRefresh() {
+        this._refreshSuspended = true;
+        this._refreshPending = null;
+    }
+
+    _resumeRefresh() {
+        if (!this._refreshSuspended) return;
+        this._refreshSuspended = false;
+        const pending = this._refreshPending;
+        this._refreshPending = null;
+        if (pending) this.refresh(pending);
+    }
+
+    // One row builder for every provider. Result.visual is plain data so
+    // providers never have to touch St; the mapping to actors happens here.
+    _makeVisual(visual) {
+        // Never let a bad visual abort the rebuild: this runs inside the loop
+        // that fills _rows, so a throw here leaves a half-populated list whose
+        // _rows no longer matches what is on screen — and then the arrow keys
+        // and Enter address the wrong rows.
+        try {
+            return this._buildVisual(visual);
+        } catch (e) {
+            logError(e, 'clipboard-box: could not build row visual');
+            return new St.Icon({
+                icon_name: 'text-x-generic-symbolic',
+                icon_size: visual?.size ?? 32, style_class: 'cb-thumb',
+            });
+        }
+    }
+
+    _buildVisual(visual) {
+        switch (visual?.kind) {
+        case 'gicon':
+            return new St.Icon({
+                gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(visual.path) }),
+                icon_size: visual.size ?? 64, style_class: 'cb-thumb',
+            });
+        case 'swatch':
+            // The inline colour wins over .cb-swatch, which only carries the
+            // size and border.
+            return new St.Widget({
+                style_class: 'cb-thumb cb-swatch',
+                style: `background-color: ${visual.color};`,
+            });
+        case 'glyph':
+            return new St.Label({ text: visual.text, style_class: 'cb-thumb cb-glyph' });
+        case 'icon':
+        default:
+            return new St.Icon({
+                icon_name: visual?.name ?? 'text-x-generic-symbolic',
+                icon_size: visual?.size ?? 32, style_class: 'cb-thumb',
+            });
+        }
+    }
+
+    _makeResultRow(result) {
+        // hover:false and can_focus:false are load-bearing. By default
+        // PopupBaseMenuItem binds hover -> active, and the active setter calls
+        // grab_key_focus() — so simply moving the mouse across the list would
+        // pull key focus off the search entry and swallow the next keystroke.
+        // Selection is drawn by us instead (see _setSelected); the ClickAction
+        // is unaffected, so mouse activation still works.
+        const item = new PopupMenu.PopupBaseMenuItem({
+            activate: true, hover: false, can_focus: false,
+        });
+        const row = new St.BoxLayout({ vertical: false, x_expand: true, style_class: 'cb-row' });
+
+        const thumb = this._makeVisual(result.visual);
 
         const labelBox = new St.BoxLayout({
             vertical: true, x_expand: true,
             y_align: Clutter.ActorAlign.CENTER, style_class: 'cb-meta',
         });
-        const name = it.kind === 'text' ? (collapseText(it.title || it.text) || 'Text') : (it.title || 'Image');
-        labelBox.add_child(nameLabel(name));
-        labelBox.add_child(new St.Label({
-            text: `${it.kind === 'text' ? 'Text' : 'Image'} · ${formatBytes(it.byteCount)} · ${relativeAge(it.createdAt)}`,
-            style_class: 'cb-hint',
-        }));
+        labelBox.add_child(nameLabel(result.title, result.titleClass));
+        const hint = new St.Label({ text: result.subtitle ?? '', style_class: 'cb-hint' });
+        labelBox.add_child(hint);
 
         // Light-touch preview: the full (single-line) text is reachable via the
         // accessible name even though the visible label is ellipsized.
-        if (it.kind === 'text' && it.text) item.accessible_name = it.text;
-
-        const actions = new St.BoxLayout({ style_class: 'cb-row-actions' });
-        actions.add_child(iconButton(
-            it.pinned ? 'starred-symbolic' : 'non-starred-symbolic',
-            it.pinned ? 'cb-pinned' : '',
-            () => this._vault?.togglePin(it.id)));
-        if (it.kind === 'image' && it.imagePath) {
-            actions.add_child(iconButton('insert-link-symbolic', '',
-                () => copyPathText(it.imagePath, this._monitor)));
-        }
-        actions.add_child(iconButton('user-trash-symbolic', '',
-            () => this._vault?.remove(it.id)));
+        if (result.accessibleText) item.accessible_name = result.accessibleText;
 
         row.add_child(thumb);
         row.add_child(labelBox);
-        row.add_child(actions);
-        item.add_child(row);
 
-        item.connect('activate', () => this._recopy(it));
-        return item;
-    }
+        if (result.accel)
+            row.add_child(new St.Label({ text: result.accel, style_class: 'cb-accel' }));
 
-    _recopy(it) {
-        this._monitor?.ignore(it.fingerprint);
-        const clipboard = St.Clipboard.get_default();
-        if (it.kind === 'text') {
-            clipboard.set_text(St.ClipboardType.CLIPBOARD, it.text ?? '');
-            Main.notify('clipboard-box', 'Copied text to clipboard');
-        } else if (it.imagePath) {
-            Gio.File.new_for_path(it.imagePath).load_contents_async(null, (file, res) => {
-                let ok, bytes;
-                try { [ok, bytes] = file.load_contents_finish(res); }
-                catch (_) { ok = false; }
-                if (!ok) {
-                    Main.notifyError('clipboard-box', 'Image is no longer available');
-                    return;
-                }
-                clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
-                Main.notify('clipboard-box', 'Copied image to clipboard');
-            });
+        const flashFor = message => this._flash({ item, row, hint, thumb, message });
+
+        if (result.actions?.length) {
+            const actions = new St.BoxLayout({ style_class: 'cb-row-actions' });
+            for (const action of result.actions) {
+                actions.add_child(iconButton(action.icon, action.styleClass ?? '', () => {
+                    // Same reasoning as item.activate below: an action that
+                    // writes to a store would otherwise destroy this row before
+                    // its confirmation is drawn.
+                    this._suspendRefresh();
+                    let outcome;
+                    try {
+                        outcome = action.run(this._ctx());
+                    } catch (e) {
+                        logError(e, `clipboard-box: row action on "${result.id}" failed`);
+                        this._resumeRefresh();
+                        return;
+                    }
+                    if (outcome?.message) flashFor(outcome.message);
+                    else this._resumeRefresh();
+                }));
+            }
+            row.add_child(actions);
         }
-    }
 
-    _makeScreenshotItem(path) {
-        const item = new PopupMenu.PopupBaseMenuItem({ activate: true });
-        const row = new St.BoxLayout({ vertical: false, x_expand: true });
-
-        const thumb = new St.Icon({
-            gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(path) }),
-            icon_size: 64, style_class: 'cb-thumb',
-        });
-
-        const labelBox = new St.BoxLayout({
-            vertical: true, x_expand: true,
-            y_align: Clutter.ActorAlign.CENTER, style_class: 'cb-meta',
-        });
-        labelBox.add_child(nameLabel(GLib.path_get_basename(path)));
-        labelBox.add_child(new St.Label({ text: 'Click to copy', style_class: 'cb-hint' }));
-
-        const actions = new St.BoxLayout({ style_class: 'cb-row-actions' });
-        actions.add_child(iconButton('insert-link-symbolic', '',
-            () => copyPathText(path, this._monitor)));
-
-        row.add_child(thumb);
-        row.add_child(labelBox);
-        row.add_child(actions);
         item.add_child(row);
 
-        item.connect('activate', () => copyPngFile(path));
-        return item;
+        // Hovering should move the selection, or the mouse and the keyboard end
+        // up disagreeing about which row Enter would fire.
+        item.connect('notify::hover', () => {
+            if (!item.hover) return;
+            const index = this._rows.findIndex(r => r.item === item);
+            if (index >= 0) this._setSelected(index, { scroll: false });
+        });
+
+        // PopupMenuBase listens to 'activate' with ConnectFlags.AFTER and closes
+        // the top menu from there. Overriding activate() rather than emitting it
+        // keeps the popup up for the flash, which then closes it. The
+        // ClickAction, the Return/space key handler and our own command-bar
+        // Enter all route through here.
+        item.activate = () => {
+            // run() usually mutates a store, and that emits 'changed'
+            // synchronously — so without this the rebuild lands before the
+            // flash below and animates actors that no longer exist.
+            this._suspendRefresh();
+            let outcome;
+            try {
+                outcome = result.run(this._ctx());
+            } catch (e) {
+                // Uncaught, this escapes into Clutter's click handler and
+                // leaves the popup with no flash and no close.
+                logError(e, `clipboard-box: result "${result.id}" failed`);
+                this._resumeRefresh();
+                return;
+            }
+            if (outcome?.message) {
+                this._flash({ item, row, hint, thumb, message: outcome.message, close: outcome.close });
+                return;   // _cancelFlash resumes when the flash ends
+            }
+            this._resumeRefresh();
+            if (outcome?.close) this.menu.close(BoxPointer.PopupAnimation.FULL);
+        };
+
+        return { item, row, hint, thumb, result };
     }
 
     destroy() {
+        this._cancelFlash();
+        this._cancelSearchDebounce();
+        this._rows = [];
+        if (this._capturedId) {
+            this.menu.actor.disconnect(this._capturedId);
+            this._capturedId = 0;
+        }
         if (this._settings && this._pausedChangedId) {
             this._settings.disconnect(this._pausedChangedId);
             this._pausedChangedId = 0;
@@ -453,7 +1007,14 @@ class Indicator extends PanelMenu.Button {
 
 export default class ClipboardBoxExtension extends Extension {
     enable() {
+        // The ESM modules stay loaded across disable/enable, so clear any state
+        // that survived a teardown which threw partway through.
+        ColorPicker.cancelActive();
+        Paste.shutdown();
+        Currency.shutdown();
+
         this._settings = this.getSettings();
+        seedQuicklinksOnce(this._settings);
 
         this._vault = new VaultStore(this._settings);
         this._vault.load();
@@ -466,6 +1027,7 @@ export default class ClipboardBoxExtension extends Extension {
             screenshots: this._screenshots,
             monitor: this._monitor,
             settings: this._settings,
+            uuid: this.uuid,
         });
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
@@ -480,10 +1042,21 @@ export default class ClipboardBoxExtension extends Extension {
             this._settings.connect('changed::max-items', () => this._vault.applyLimits()),
             this._settings.connect('changed::entry-ttl-days', () => this._vault.applyLimits()),
             this._settings.connect('changed::screenshots-dir', () => this._screenshots.restart()),
+            // Edited in the prefs window, which is a separate process — this is
+            // what makes an edit show up in the popup without a shell restart.
+            this._settings.connect('changed::snippets', () => {
+                this._indicator?.invalidateConfigCache();
+                this._indicator?.refresh();
+            }),
+            this._settings.connect('changed::quicklinks', () => {
+                this._indicator?.invalidateConfigCache();
+                this._indicator?.refresh();
+            }),
         ];
 
         this._addKeybindings();
         this._warnIfNoClipboardHelper();
+        this._warnIfVaultUnreadable();
 
         this._screenshots.start();
         this._monitor.start();
@@ -509,12 +1082,32 @@ export default class ClipboardBoxExtension extends Extension {
         });
     }
 
+    // A vault that failed to parse is never silently replaced — VaultStore moves
+    // it aside and refuses to persist over it. Say so, because the alternative
+    // is the user discovering an empty history with no explanation. Deferred for
+    // the same reason as the helper warning above.
+    _warnIfVaultUnreadable() {
+        const failure = this._vault?.loadFailure;
+        if (!failure) return;
+        this._vaultWarnId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
+            this._vaultWarnId = 0;
+            Main.notifyError('clipboard-box', failure.archivedTo
+                ? `History could not be read and was saved to ${failure.archivedTo}. Starting empty.`
+                : 'History could not be read. Nothing new will be saved until ' +
+                  'vault.json is repaired or removed.');
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _addKeybindings() {
         const flags = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
         const handlers = {
             'toggle-menu': () => this._indicator?.menu.toggle(),
             'capture-area': () => { this._indicator?.menu.close(); this._indicator?._capture('area'); },
             'capture-full': () => { this._indicator?.menu.close(); this._indicator?._capture('full'); },
+            'pick-color': () => { this._indicator?.menu.close(); this._indicator?._pickColor(); },
+            'open-snippets': () => this._indicator?.openForTool('snippet'),
+            'open-emoji': () => this._indicator?.openForTool('emoji'),
         };
         for (const name of KEYBINDINGS) {
             Main.wm.addKeybinding(name, this._settings,
@@ -527,11 +1120,25 @@ export default class ClipboardBoxExtension extends Extension {
     }
 
     disable() {
+        // First, before anything below can throw: a colour pick holds a modal
+        // grab, and one that outlives the extension leaves the session unable to
+        // click anything. ExtensionManager only logs a throw from disable().
+        ColorPicker.cancelActive();
+        // Likewise before anything else: a queued paste firing after we are gone
+        // would type into whatever window happens to have focus.
+        Paste.shutdown();
+        // Cancels any rate fetch still in flight.
+        Currency.shutdown();
+
         this._removeKeybindings();
 
         if (this._warnId) {
             GLib.source_remove(this._warnId);
             this._warnId = 0;
+        }
+        if (this._vaultWarnId) {
+            GLib.source_remove(this._vaultWarnId);
+            this._vaultWarnId = 0;
         }
 
         if (this._settings && this._settingsIds) {
@@ -553,6 +1160,9 @@ export default class ClipboardBoxExtension extends Extension {
         }
         if (this._vault) {
             if (this._vaultId) this._vault.disconnect(this._vaultId);
+            // Vault writes are coalesced and asynchronous, so anything from the
+            // last few hundred milliseconds is still only in memory.
+            this._vault.flush();
             this._vault = null;
             this._vaultId = 0;
         }

@@ -1,5 +1,6 @@
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 
 // Keep parity with the macOS VaultStore: bounded ring buffer of copied items,
 // deduplicated by a content fingerprint, persisted as plaintext JSON. Image
@@ -10,6 +11,13 @@ import GLib from 'gi://GLib';
 // in prefs; a null settings object falls back to these defaults.
 const DEFAULT_MAX_ITEMS = 200;
 const TITLE_MAX = 84;
+
+// How long to sit on changes before writing. Long enough to coalesce a burst of
+// copies into one write, short enough that a crash costs almost nothing.
+const PERSIST_DEBOUNCE_MS = 400;
+
+const WRITE_FLAGS =
+    Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION;
 
 // SHA-256 over "<kind>\0<bytes>", matching macOS makeFingerprint(kind:data:).
 // `bytes` must be a Uint8Array.
@@ -40,6 +48,11 @@ export const VaultStore = GObject.registerClass({
         // is never interpreted as a GObject property dictionary.
         this._settings = settings ?? null;
         this._items = [];
+        // Non-null after a load that could not parse the vault; see load().
+        this.loadFailure = null;
+        // Coalesced-write state; see _persist()/flush().
+        this._persistId = 0;
+        this._dirty = false;
         this._dataDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'clipboard-box']);
         this._imagesDir = GLib.build_filenamev([this._dataDir, 'images']);
         this._vaultPath = GLib.build_filenamev([this._dataDir, 'vault.json']);
@@ -62,34 +75,85 @@ export const VaultStore = GObject.registerClass({
         GLib.mkdir_with_parents(this._imagesDir, 0o700);
     }
 
+    // Move an unreadable vault aside instead of writing over it. Matches macOS
+    // VaultStore.load(), which archives rather than discards. The name is
+    // timestamped so a second failure can't clobber the first rescue.
+    _quarantine() {
+        const stamp = GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S');
+        let dest = GLib.build_filenamev([this._dataDir, `vault.corrupt-${stamp}.json`]);
+        for (let n = 1; GLib.file_test(dest, GLib.FileTest.EXISTS); n++)
+            dest = GLib.build_filenamev([this._dataDir, `vault.corrupt-${stamp}-${n}.json`]);
+        if (GLib.rename(this._vaultPath, dest) !== 0) return null;
+        return dest;
+    }
+
     load() {
         this._ensureDirs();
+        // Set when the on-disk vault could not be read. While true we refuse to
+        // persist, so a parse failure can never overwrite recoverable history.
+        this.loadFailure = null;
+
         if (!GLib.file_test(this._vaultPath, GLib.FileTest.EXISTS)) {
             this._items = [];
+            // Still sweep: with no vault at all, every PNG under images/ is by
+            // definition unreferenced. Skipping this was leaking the whole
+            // directory whenever vault.json went missing on its own.
+            this._gcImages();
             this.emit('changed');
             return;
         }
         try {
             const [ok, contents] = GLib.file_get_contents(this._vaultPath);
-            if (!ok) {
-                this._items = [];
-            } else {
-                const parsed = JSON.parse(new TextDecoder().decode(contents));
-                // Drop image items whose backing file has vanished.
-                this._items = (Array.isArray(parsed) ? parsed : []).filter(it =>
-                    it && (it.kind !== 'image' ||
-                        (it.imagePath && GLib.file_test(it.imagePath, GLib.FileTest.EXISTS))));
-            }
+            if (!ok) throw new Error('vault.json could not be read');
+            const parsed = JSON.parse(new TextDecoder().decode(contents));
+            if (!Array.isArray(parsed)) throw new Error('vault.json is not an array');
+            // Drop image items whose backing file has vanished.
+            this._items = parsed.filter(it =>
+                it && (it.kind !== 'image' ||
+                    (it.imagePath && GLib.file_test(it.imagePath, GLib.FileTest.EXISTS))));
         } catch (e) {
             logError(e, 'clipboard-box: failed to load vault.json');
             this._items = [];
+            // Rescue the bytes before anything can persist over them. If even
+            // the rename fails, loadFailure still blocks _persist(), so the
+            // original file survives untouched.
+            this.loadFailure = { archivedTo: this._quarantine() };
+            this.emit('changed');
+            return;
         }
+
         // Apply time- and size-based limits that may have changed while we were
         // not running, then write the cleaned list back.
         this._expire();
         this._trim();
+        this._gcImages();
         this._persist();
         this.emit('changed');
+    }
+
+    // Nothing reconciles images/ against vault.json during normal operation: a
+    // crash between the PNG write in add() and the JSON write that follows it
+    // strands the file forever. Sweep once per load, when the item list is
+    // known-good — never after a failed load, where every image would look
+    // orphaned and the quarantined vault still references them.
+    _gcImages() {
+        if (this.loadFailure) return;
+        let dir;
+        try {
+            dir = GLib.Dir.open(this._imagesDir, 0);
+        } catch (_) {
+            return; // No images directory yet — nothing to collect.
+        }
+        const live = new Set(this._items
+            .filter(it => it.kind === 'image' && it.imagePath)
+            .map(it => it.imagePath));
+        let name;
+        while ((name = dir.read_name()) !== null) {
+            if (!name.endsWith('.png')) continue;
+            const path = GLib.build_filenamev([this._imagesDir, name]);
+            if (!live.has(path)) GLib.unlink(path);
+        }
+        dir.close();
     }
 
     // payload: { kind: 'text'|'image', text?, bytes?(Uint8Array), contentType?, title?, fingerprint? }
@@ -119,8 +183,7 @@ export const VaultStore = GObject.registerClass({
             imagePath = GLib.build_filenamev([this._imagesDir, `${fp}.png`]);
             if (!GLib.file_test(imagePath, GLib.FileTest.EXISTS)) {
                 try {
-                    GLib.file_set_contents(imagePath, dataBytes);
-                    GLib.chmod(imagePath, 0o600);
+                    this._writePrivate(imagePath, dataBytes);
                 } catch (e) {
                     logError(e, 'clipboard-box: failed to write image payload');
                     return null;
@@ -233,13 +296,72 @@ export const VaultStore = GObject.registerClass({
             GLib.unlink(item.imagePath);
     }
 
+    // Atomic write that is owner-only from the moment it has content.
+    //
+    // g_file_set_contents creates its temp file at 0666 & ~umask and does not
+    // inherit the target's mode, so a chmod *after* the write means the payload
+    // exists at 0644 for the length of the write. G_FILE_CREATE_PRIVATE creates
+    // it 0600 up front, and replace_contents still does the temp-file + rename
+    // dance, so atomicity is unchanged.
+    _writePrivate(path, bytes) {
+        Gio.File.new_for_path(path).replace_contents(
+            bytes, null, false, WRITE_FLAGS, null);
+    }
+
+    // Mark the vault dirty and schedule a write.
+    //
+    // This used to serialize the whole array and block on file_set_contents,
+    // from seven call sites — toggling one pin rewrote the entire history with
+    // an fsync, on the compositor thread. Now it coalesces (a burst of copies
+    // costs one write) and the write itself is async. disable() calls flush()
+    // so nothing queued is lost at shutdown.
     _persist() {
+        // The load failed and we could not move the unreadable file aside, so
+        // the user's real history is still sitting at _vaultPath. Writing our
+        // empty salvage over it is exactly the data loss we're avoiding.
+        if (this.loadFailure && !this.loadFailure.archivedTo) return;
+        this._dirty = true;
+        if (this._persistId) return;
+        this._persistId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT_IDLE, PERSIST_DEBOUNCE_MS, () => {
+                this._persistId = 0;
+                this._writeVault(false);
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    // Write anything outstanding right now, synchronously. Only for shutdown,
+    // where a brief block is the correct trade against losing the last copy.
+    flush() {
+        if (this._persistId) {
+            GLib.source_remove(this._persistId);
+            this._persistId = 0;
+        }
+        if (this._dirty) this._writeVault(true);
+    }
+
+    _writeVault(sync) {
+        this._dirty = false;
         try {
             this._ensureDirs();
             const json = JSON.stringify(this._items, null, 2);
-            GLib.file_set_contents(this._vaultPath, new TextEncoder().encode(json));
-            // History can contain anything the user copied — keep it owner-only.
-            GLib.chmod(this._vaultPath, 0o600);
+            const bytes = new TextEncoder().encode(json);
+            if (sync) {
+                this._writePrivate(this._vaultPath, bytes);
+                return;
+            }
+            // replace_contents_bytes_async, not replace_contents_async: the
+            // latter does not keep the buffer alive for the duration of the
+            // write in GJS. A GBytes is owned by the callee.
+            Gio.File.new_for_path(this._vaultPath).replace_contents_bytes_async(
+                new GLib.Bytes(bytes), null, false, WRITE_FLAGS, null,
+                (file, res) => {
+                    try {
+                        file.replace_contents_finish(res);
+                    } catch (e) {
+                        logError(e, 'clipboard-box: failed to persist vault.json');
+                    }
+                });
         } catch (e) {
             logError(e, 'clipboard-box: failed to persist vault.json');
         }
