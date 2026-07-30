@@ -1,0 +1,13 @@
+{
+  "name": "clipboard-box-docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Build tooling for the GitHub Pages site. Scoped to docs/ so the extension and its tests stay dependency-free.",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  },
+  "devDependencies": {
+    "playwright": "1.62.0"
+  }
+}

@@ -1,0 +1,693 @@
+/* Shared chrome for the popup replicas that docs/build.mjs renders into
+   docs/shots/. These are mockups, not captures: nothing here imports the real
+   UI, it reproduces it.
+ *
+ * Where a number below looks arbitrary it was read off the real thing —
+ * linux/clipboard-box@dfxe.github.io/stylesheet.css for the GNOME rows and
+ * macos/ClipboardBox/PopoverView.swift for the popover — so a change to either
+ * has one obvious place to land here. The values that came across:
+ *
+ *   .cb-row        6px radius            .cb-thumb   4px radius, 12px margin
+ *   .cb-hint       opacity 0.6           .cb-accel   opacity 0.45
+ *   .cb-selected   rgba(128,128,128,.22) .cb-swatch  32px, grey 0.55 border
+ *   .cb-answer     monospace, 1.25em     .cb-scroll  min-width 420px
+ *   popover        frame(width: 620), padding 14, rows 8 apart
+ *
+ * Fonts: Cantarell is GNOME's UI font and Inter stands in for SF Pro, which
+ * exists on neither this machine nor a CI runner. Both are pinned rather than
+ * left to a generic stack because CI re-renders these shots for the live page —
+ * the workflow apt-installs fonts-cantarell and fonts-inter so a runner draws
+ * them the same way a local build does. */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+/* The element build.mjs screenshots. Padding is the visible mat around the
+   popup, so the PNG needs no framing of its own on the page. */
+.mock {
+    display: inline-block;
+    padding: 26px 30px 34px;
+    font-kerning: normal;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* ─── Symbolic icons ──────────────────────────────────────────────────────
+   Drawn here rather than pulled from an icon theme: no theme is installed on a
+   CI runner, and a missing-image box in a shipped screenshot is worse than an
+   approximation. Painted through mask-image so each one inherits currentColor
+   the way a real symbolic icon does. */
+
+.i {
+    display: inline-block;
+    flex: none;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+}
+
+.i-doc {
+    -webkit-mask-image: var(--i-doc);
+    mask-image: var(--i-doc);
+}
+.i-image {
+    -webkit-mask-image: var(--i-image);
+    mask-image: var(--i-image);
+}
+.i-star {
+    -webkit-mask-image: var(--i-star);
+    mask-image: var(--i-star);
+}
+.i-star-on {
+    -webkit-mask-image: var(--i-star-on);
+    mask-image: var(--i-star-on);
+}
+.i-trash {
+    -webkit-mask-image: var(--i-trash);
+    mask-image: var(--i-trash);
+}
+.i-link {
+    -webkit-mask-image: var(--i-link);
+    mask-image: var(--i-link);
+}
+.i-snippet {
+    -webkit-mask-image: var(--i-snippet);
+    mask-image: var(--i-snippet);
+}
+.i-search {
+    -webkit-mask-image: var(--i-search);
+    mask-image: var(--i-search);
+}
+.i-clipboard {
+    -webkit-mask-image: var(--i-clipboard);
+    mask-image: var(--i-clipboard);
+}
+.i-tray {
+    -webkit-mask-image: var(--i-tray);
+    mask-image: var(--i-tray);
+}
+.i-camera {
+    -webkit-mask-image: var(--i-camera);
+    mask-image: var(--i-camera);
+}
+.i-display {
+    -webkit-mask-image: var(--i-display);
+    mask-image: var(--i-display);
+}
+.i-click {
+    -webkit-mask-image: var(--i-click);
+    mask-image: var(--i-click);
+}
+.i-align {
+    -webkit-mask-image: var(--i-align);
+    mask-image: var(--i-align);
+}
+.i-calc {
+    -webkit-mask-image: var(--i-calc);
+    mask-image: var(--i-calc);
+}
+
+:root {
+    --i-doc: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M9.2 1.9H4.7a1 1 0 0 0-1 1v10.2a1 1 0 0 0 1 1h6.6a1 1 0 0 0 1-1V5.2z'/><path d='M9.2 1.9v3.3h3.1'/><path d='M5.9 8.5h4.2M5.9 10.8h3'/></svg>");
+    --i-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><rect x='2.2' y='3.3' width='11.6' height='9.4' rx='1.3'/><circle cx='5.7' cy='6.5' r='1'/><path d='M2.6 11.4 6.4 8.1l2.1 1.9 2.1-1.7 2.8 2.8'/></svg>");
+    --i-star: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2.3l1.79 3.63 4.01.58-2.9 2.83.68 3.99L8 11.47l-3.58 1.86.68-3.99-2.9-2.83 4.01-.58z'/></svg>");
+    --i-star-on: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2.3l1.79 3.63 4.01.58-2.9 2.83.68 3.99L8 11.47l-3.58 1.86.68-3.99-2.9-2.83 4.01-.58z'/></svg>");
+    --i-trash: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M3.3 4.7h9.4'/><path d='M6.4 4.7V3.2h3.2v1.5'/><path d='M4.9 4.7l.55 8.3a1 1 0 0 0 1 .93h3.1a1 1 0 0 0 1-.93l.55-8.3'/></svg>");
+    --i-link: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M6.7 9.3a2.5 2.5 0 0 1 0-3.5l1.9-1.9a2.5 2.5 0 0 1 3.5 3.5l-1 1'/><path d='M9.3 6.7a2.5 2.5 0 0 1 0 3.5l-1.9 1.9a2.5 2.5 0 0 1-3.5-3.5l1-1'/></svg>");
+    --i-snippet: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M4.1 4.2h7.8'/><path d='M8 4.2v7.6'/><path d='M6.3 11.8h3.4'/></svg>");
+    --i-search: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'><circle cx='6.9' cy='6.9' r='4.2'/><path d='M10.1 10.1 13.5 13.5'/></svg>");
+    --i-clipboard: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><rect x='6' y='1.9' width='4' height='2.2' rx='.6'/><path d='M6 3.5H4.5a1 1 0 0 0-1 1v8.6a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4.5a1 1 0 0 0-1-1H10'/></svg>");
+    --i-tray: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M2.4 9.4 4.2 3.9h7.6l1.8 5.5v2.4a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1z'/><path d='M2.4 9.4h3.1l.7 1.5h3.6l.7-1.5h3.1'/></svg>");
+    --i-camera: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M2.4 5.7V3.5a1 1 0 0 1 1-1h2.2M10.4 2.5h2.2a1 1 0 0 1 1 1v2.2M13.6 10.3v2.2a1 1 0 0 1-1 1h-2.2M5.6 13.5H3.4a1 1 0 0 1-1-1v-2.2'/><circle cx='8' cy='8' r='2.3'/></svg>");
+    --i-display: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='3' width='12' height='8' rx='1.2'/><path d='M6 13.5h4'/></svg>");
+    --i-click: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><path d='M4.3 2.1v9.2l2.3-2.2 1.7 3.9 1.9-.8-1.7-3.8h3.1z'/></svg>");
+    --i-align: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round'><path d='M2.6 4h10.8M2.6 7.3h7.2M2.6 10.6h10.8M2.6 13.9h7.2'/></svg>");
+    --i-calc: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><rect x='3.2' y='1.9' width='9.6' height='12.2' rx='1.3'/><path d='M5.4 4.4h5.2'/><path d='M5.8 7.6h.01M8 7.6h.01M10.2 7.6h.01M5.8 9.8h.01M8 9.8h.01M10.2 9.8h.01M5.8 12h.01M8 12h.01M10.2 12h.01'/></svg>");
+}
+
+/* ─── GNOME: Adwaita dark shell ─────────────────────────────────────────── */
+
+.gnome {
+    /* A stand-in for whatever wallpaper is behind the panel. Kept dim and
+       featureless so it never competes with the popup. */
+    background:
+        radial-gradient(120% 90% at 12% 0%, #2f4858 0%, transparent 60%),
+        radial-gradient(90% 80% at 100% 100%, #3d3350 0%, transparent 55%),
+        linear-gradient(160deg, #1b2027 0%, #14171c 100%);
+    color: #ffffff;
+    font-family: Cantarell, Inter, "DejaVu Sans", sans-serif;
+    font-size: 15px;
+    line-height: 1.3;
+}
+
+/* The top bar, so the popup reads as hanging off a panel icon rather than
+   floating in space. */
+.panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px 6px 0 0;
+    background: rgba(0, 0, 0, 0.86);
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.panel-side {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.panel-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 99px;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* The indicator whose menu is open. Adwaita keeps the active panel button
+   filled while its popup is up. */
+.panel-item.is-open {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.panel-item .i {
+    width: 16px;
+    height: 16px;
+}
+
+/* The popup itself. Adwaita 45+ draws menu content at 12px radius over a
+   hairline light border, with the arrow tucked under the panel. */
+/* Status-area menus open under their own indicator, which is over on the right
+   of the panel — hence flex-end and the arrow's offset rather than centring. */
+.popup-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-top: 6px;
+}
+
+.popup {
+    width: 466px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    background: #2c2c2c;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.35),
+        0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+.popup-arrow {
+    width: 0;
+    height: 0;
+    margin-right: 22px;
+    margin-bottom: -1px;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #2c2c2c;
+    border-left: 8px solid transparent;
+}
+
+/* Area / Screen / Color. Three equal buttons, .cb-capture-btn's 6px 12px. */
+.capture-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 2px 6px;
+}
+
+.btn {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* St.Entry, focused: the popup grabs it on open, so the mock shows it focused
+   with a caret. */
+.search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 2px;
+    padding: 7px 10px;
+    border: 2px solid #3584e4;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.search .i {
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+}
+
+/* Not flex: 1 — the caret sits immediately after the text the way a real entry
+   draws it, rather than being pushed out to the far edge of the field. */
+.search-text {
+    font-size: 14.5px;
+}
+
+.search-text.is-empty {
+    opacity: 0.5;
+}
+
+.caret {
+    width: 1px;
+    height: 17px;
+    background: #ffffff;
+}
+
+/* PopupSwitchMenuItem. */
+.switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex: none;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.switch::after {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 99px;
+    background: #d8d8d8;
+    content: "";
+}
+
+/* PopupSeparatorMenuItem(title): the provider name, then a rule taking the
+   rest of the width. */
+.section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    opacity: 0.55;
+}
+
+.section::after {
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+    content: "";
+    opacity: 0.45;
+}
+
+/* A result row: thumb, two-line label, optional accel, optional actions. */
+.row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+
+.row.is-selected {
+    background: rgba(128, 128, 128, 0.22);
+}
+
+.thumb {
+    display: flex;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    border-radius: 4px;
+    opacity: 0.9;
+}
+
+.thumb .i {
+    width: 26px;
+    height: 26px;
+}
+
+/* .cb-swatch: a hex entry renders as its own colour. */
+.thumb.swatch {
+    border: 1px solid rgba(128, 128, 128, 0.55);
+    opacity: 1;
+}
+
+/* An image entry shows the picture itself (gicon at size 64, drawn into the
+   32px thumb footprint). Faked with a gradient — a real thumbnail would mean
+   shipping a sample image just to have something to photograph. */
+.thumb.shot {
+    background:
+        linear-gradient(150deg, #6c8ebf 0%, #3d5a80 48%, #22303f 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    opacity: 1;
+}
+
+.meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.name {
+    overflow: hidden;
+    font-size: 14.2px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* .cb-answer: monospaced and larger, so a number reads as an answer. */
+.name.answer {
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 17.5px;
+}
+
+.hint {
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 11.8px;
+    opacity: 0.6;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.accel {
+    margin-left: 8px;
+    font-size: 11.8px;
+    opacity: 0.45;
+}
+
+.row-actions {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.row-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.55;
+}
+
+.row-btn .i {
+    width: 16px;
+    height: 16px;
+}
+
+/* .cb-row-btn.cb-pinned stays at full opacity so a pin reads as state. */
+.row-btn.is-pinned {
+    opacity: 1;
+}
+
+.sep {
+    height: 1px;
+    margin: 6px 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Clear history / Reveal newest in Files / Quit. */
+.menu-item {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14.5px;
+}
+
+/* ─── macOS: light-mode popover ─────────────────────────────────────────── */
+
+.macos {
+    /* Menu bar apps follow the system appearance and light is the default, so
+       this one is deliberately the bright shot of the three. */
+    background: linear-gradient(155deg, #b7c4d4 0%, #8e9bb0 55%, #6f7a8d 100%);
+    color: #000000;
+    font-family: Inter, "Helvetica Neue", "DejaVu Sans", sans-serif;
+    font-size: 13px;
+    line-height: 1.32;
+    letter-spacing: -0.005em;
+}
+
+.menubar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 25px;
+    padding: 0 12px;
+    border-radius: 5px 5px 0 0;
+    background: rgba(246, 246, 246, 0.86);
+    color: #1d1d1f;
+    font-size: 12.5px;
+}
+
+.menubar-side {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+}
+
+.menubar .i {
+    width: 15px;
+    height: 15px;
+}
+
+.menubar-item.is-open {
+    display: flex;
+    align-items: center;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* frame(width: 620) with .padding(14), and the 760px height SwiftUI pins. */
+.popover {
+    display: flex;
+    width: 620px;
+    height: 760px;
+    flex-direction: column;
+    padding: 14px;
+    border: 0.5px solid rgba(0, 0, 0, 0.16);
+    border-radius: 11px;
+    background: #f2f2f4;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+    gap: 10px;
+}
+
+.popover-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-top: 7px;
+}
+
+.pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.pop-title {
+    font-size: 14.5px;
+    font-weight: 600;
+}
+
+.pop-count {
+    color: rgba(0, 0, 0, 0.55);
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 11.5px;
+}
+
+.pop-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 2px;
+    overflow: hidden;
+}
+
+/* VaultItemRow: padding 8, secondary 0.08 fill, 8px radius, 0.16 border. */
+.mac-row {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    gap: 10px;
+}
+
+/* frame(width: 96, height: 68), 6px radius, 0.18 border. */
+.mac-preview {
+    display: flex;
+    width: 96px;
+    height: 68px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.mac-preview .i {
+    width: 22px;
+    height: 22px;
+}
+
+.mac-preview.shot {
+    background: linear-gradient(150deg, #8fb0d9 0%, #4b6f9c 52%, #2b3f5c 100%);
+}
+
+/* No .swatch counterpart on purpose: rendering a hex entry as its own colour is
+   a GNOME-only feature, and this popover must not imply otherwise. */
+
+.mac-meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.mac-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.mac-name .i {
+    width: 14px;
+    height: 14px;
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.mac-name span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mac-sub {
+    margin-top: 4px;
+    color: rgba(0, 0, 0, 0.55);
+    font-size: 11px;
+}
+
+.mac-row > .i {
+    width: 16px;
+    height: 16px;
+    color: rgba(0, 0, 0, 0.45);
+}
+
+.mac-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.13);
+}
+
+.pop-foot {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    gap: 10px;
+}
+
+.foot-note {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    color: rgba(0, 0, 0, 0.55);
+    font-size: 11px;
+    gap: 5px;
+}
+
+.foot-note .i {
+    width: 13px;
+    height: 13px;
+}
+
+/* Toggle(.switch) at .controlSize(.mini). */
+.mac-switch {
+    display: flex;
+    align-items: center;
+    font-size: 11.5px;
+    gap: 5px;
+}
+
+.mac-switch i {
+    position: relative;
+    display: block;
+    width: 26px;
+    height: 15px;
+    border-radius: 99px;
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.mac-switch i::after {
+    position: absolute;
+    top: 1.5px;
+    left: 1.5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 99px;
+    background: #ffffff;
+    box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.3);
+    content: "";
+}
+
+.mac-btn {
+    display: flex;
+    align-items: center;
+    padding: 3px 9px;
+    border: 0.5px solid rgba(0, 0, 0, 0.16);
+    border-radius: 6px;
+    background: #fdfdfd;
+    box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12);
+    font-size: 11.5px;
+    gap: 4px;
+}
+
+.mac-btn .i {
+    width: 12px;
+    height: 12px;
+    color: rgba(0, 0, 0, 0.65);
+}
+
+.mac-quit {
+    padding: 3px 4px;
+    color: #0a63cf;
+    font-size: 11.5px;
+}

@@ -1,0 +1,88 @@
+<!doctype html>
+<!--
+  The GNOME command bar, mid-query. This is the example the README already walks
+  through in prose ("100 km in mi"), so the strings here are the real ones: they
+  were taken from `evaluate('100 km in mi')` in calc.js, which returns
+  {title: '62.1371192237 mi', subtitle: '100 km'}, and from historyProvider's
+  subtitle template `Text · 11 B · 2m`.
+
+  Sections follow PROVIDERS order in extension.js, and only the two that match
+  are drawn — with a query, a provider that finds nothing is hidden rather than
+  printing "No matches". Row one carries .is-selected because key focus never
+  leaves the entry, so the extension draws the selection itself.
+
+  Nothing here is a capture. Everything below is invented, deliberately dull
+  content: no tokens, no credentials, nothing that resembles a real secret.
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>clipboard-box — GNOME command bar</title>
+        <link rel="stylesheet" href="mock.css" />
+    </head>
+    <body>
+        <div class="mock gnome">
+            <div class="panel">
+                <div class="panel-side">
+                    <span class="panel-item">Wed 15:42</span>
+                </div>
+                <div class="panel-side">
+                    <span class="panel-item is-open">
+                        <span class="i i-clipboard"></span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="popup-wrap">
+                <div class="popup-arrow"></div>
+                <div class="popup">
+                    <div class="capture-row">
+                        <div class="btn">Area</div>
+                        <div class="btn">Screen</div>
+                        <div class="btn">Color</div>
+                    </div>
+
+                    <div class="search">
+                        <span class="i i-search"></span>
+                        <span class="search-text">100 km in mi</span>
+                        <span class="caret"></span>
+                    </div>
+
+                    <div class="switch-row">
+                        <span>Pause monitoring</span>
+                        <span class="switch"></span>
+                    </div>
+
+                    <div class="section">Answer</div>
+                    <div class="row is-selected">
+                        <div class="thumb"><span class="i i-calc"></span></div>
+                        <div class="meta">
+                            <div class="name answer">62.1371192237 mi</div>
+                            <div class="hint">100 km</div>
+                        </div>
+                        <div class="accel">Enter</div>
+                    </div>
+
+                    <div class="section">Clipboard history</div>
+                    <div class="row">
+                        <div class="thumb"><span class="i i-doc"></span></div>
+                        <div class="meta">
+                            <div class="name">100 km in mi</div>
+                            <div class="hint">Text · 11 B · 2m</div>
+                        </div>
+                        <div class="row-actions">
+                            <span class="row-btn"><span class="i i-star"></span></span>
+                            <span class="row-btn"><span class="i i-snippet"></span></span>
+                            <span class="row-btn"><span class="i i-trash"></span></span>
+                        </div>
+                    </div>
+
+                    <div class="sep"></div>
+                    <div class="menu-item">Clear history</div>
+                    <div class="menu-item">Reveal newest in Files</div>
+                    <div class="menu-item">Quit</div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

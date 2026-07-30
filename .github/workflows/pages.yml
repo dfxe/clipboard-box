@@ -1,0 +1,66 @@
+name: Pages
+
+# Rebuilds and redeploys the site on every push to main, so the page follows
+# README.md without anyone having to remember it. docs/index.html is generated
+# here rather than committed — see docs/build.mjs.
+on:
+  push:
+    branches: [main]
+  # Handy for re-deploying after a Pages setting changes, with no commit to make.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, newest wins. A superseded run has nothing worth
+# finishing.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The mockups pin Cantarell (GNOME's UI font) and Inter (standing in for
+      # SF Pro). Neither ships on a runner, and this job re-renders the shots
+      # that go live — without them the screenshots would fall back to DejaVu
+      # and stop matching the ones committed from a developer machine.
+      - name: Install the fonts the mockups pin
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-cantarell fonts-inter
+
+      - name: Install Playwright
+        working-directory: docs
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build the site
+        run: node docs/build.mjs
+
+      # enablement lets the first run turn Pages on by itself. If org policy
+      # blocks that, set Settings -> Pages -> Source to "GitHub Actions" once.
+      - uses: actions/configure-pages@v4
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
