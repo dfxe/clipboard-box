@@ -100,7 +100,7 @@ function buildIndex() {
             .filter(e => e?.char && e?.name && !e.name.includes(' skin tone'))
             .map(e => ({ char: e.char, name: e.name }));
     } catch (e) {
-        log(`clipboard-box: Shell emoji data unavailable (${e.message}); using fallback list`);
+        log(`cboite: Shell emoji data unavailable (${e.message}); using fallback list`);
         entries = FALLBACK;
     }
 

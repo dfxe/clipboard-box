@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct ClipboardBoxApp: App {
+struct CBoiteApp: App {
     @StateObject private var store: VaultStore
     private let clipboardOverride: ClipboardOverrideController
 
@@ -12,7 +12,7 @@ struct ClipboardBoxApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("clipboard-box", systemImage: "lock.rectangle.stack") {
+        MenuBarExtra("cboite", systemImage: "lock.rectangle.stack") {
             PopoverView()
                 .environmentObject(store)
         }

@@ -2,6 +2,8 @@ import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import { dataDir } from './dataDir.js';
+
 // Keep parity with the macOS VaultStore: bounded ring buffer of copied items,
 // deduplicated by a content fingerprint, persisted as plaintext JSON. Image
 // payloads live as PNG files alongside the JSON (macOS inlines base64; in GJS a
@@ -53,7 +55,7 @@ export const VaultStore = GObject.registerClass({
         // Coalesced-write state; see _persist()/flush().
         this._persistId = 0;
         this._dirty = false;
-        this._dataDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'clipboard-box']);
+        this._dataDir = dataDir();
         this._imagesDir = GLib.build_filenamev([this._dataDir, 'images']);
         this._vaultPath = GLib.build_filenamev([this._dataDir, 'vault.json']);
     }
@@ -112,7 +114,7 @@ export const VaultStore = GObject.registerClass({
                 it && (it.kind !== 'image' ||
                     (it.imagePath && GLib.file_test(it.imagePath, GLib.FileTest.EXISTS))));
         } catch (e) {
-            logError(e, 'clipboard-box: failed to load vault.json');
+            logError(e, 'cboite: failed to load vault.json');
             this._items = [];
             // Rescue the bytes before anything can persist over them. If even
             // the rename fails, loadFailure still blocks _persist(), so the
@@ -185,7 +187,7 @@ export const VaultStore = GObject.registerClass({
                 try {
                     this._writePrivate(imagePath, dataBytes);
                 } catch (e) {
-                    logError(e, 'clipboard-box: failed to write image payload');
+                    logError(e, 'cboite: failed to write image payload');
                     return null;
                 }
             }
@@ -359,11 +361,11 @@ export const VaultStore = GObject.registerClass({
                     try {
                         file.replace_contents_finish(res);
                     } catch (e) {
-                        logError(e, 'clipboard-box: failed to persist vault.json');
+                        logError(e, 'cboite: failed to persist vault.json');
                     }
                 });
         } catch (e) {
-            logError(e, 'clipboard-box: failed to persist vault.json');
+            logError(e, 'cboite: failed to persist vault.json');
         }
     }
 });

@@ -21,7 +21,7 @@ jobs:
       # A schema that does not compile makes enable() throw at runtime with a
       # message that points nowhere near the actual mistake.
       - name: Validate the GSettings schema
-        run: glib-compile-schemas --strict --dry-run "linux/clipboard-box@dfxe.github.io/schemas/"
+        run: glib-compile-schemas --strict --dry-run "linux/cboite@dfxe.github.io/schemas/"
 
       - name: Parse-check every module
         run: ./linux/tests/parse-check.sh

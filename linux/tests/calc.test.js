@@ -2,7 +2,7 @@
 // because this code runs inside the compositor process. That makes it exactly
 // the kind of module where a regression is silent, so it gets the most tests.
 
-import { evaluate, parseCurrency } from '../clipboard-box@dfxe.github.io/calc.js';
+import { evaluate, parseCurrency } from '../cboite@dfxe.github.io/calc.js';
 import { suite, it, eq, ok } from './harness.js';
 
 suite('calc');

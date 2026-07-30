@@ -4,14 +4,14 @@
 
 import GLib from 'gi://GLib';
 
-import { VaultStore, fingerprintFor, collapseText } from '../clipboard-box@dfxe.github.io/vaultStore.js';
+import { VaultStore, fingerprintFor, collapseText } from '../cboite@dfxe.github.io/vaultStore.js';
 import { suite, it, eq, ok, silenced } from './harness.js';
 
 suite('vaultStore');
 
-const sandboxed = GLib.getenv('CLIPBOARD_BOX_TEST_SANDBOX') === '1';
+const sandboxed = GLib.getenv('CBOITE_TEST_SANDBOX') === '1';
 
-const dataDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'clipboard-box']);
+const dataDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'cboite']);
 const vaultPath = GLib.build_filenamev([dataDir, 'vault.json']);
 const imagesDir = GLib.build_filenamev([dataDir, 'images']);
 

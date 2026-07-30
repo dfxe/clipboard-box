@@ -60,7 +60,7 @@ jobs:
       # Enabling it is a one-time manual step — Settings -> Pages -> Source:
       # "GitHub Actions", or:
       #
-      #   gh api -X POST repos/dfxe/clipboard-box/pages -f build_type=workflow
+      #   gh api -X POST repos/dfxe/cboite/pages -f build_type=workflow
       #
       # which is what was actually run here. Left in place so that a repo fork
       # with a Pages site configured needs no edit.

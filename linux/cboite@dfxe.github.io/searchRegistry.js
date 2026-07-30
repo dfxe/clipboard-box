@@ -50,7 +50,7 @@ export function runSearch(providers, query, ctx) {
             results = provider.search(query, ctx) ?? [];
         } catch (e) {
             // One misbehaving provider must not take the whole popup down.
-            logError(e, `clipboard-box: provider "${provider.id}" failed`);
+            logError(e, `cboite: provider "${provider.id}" failed`);
             results = [];
         }
 
@@ -69,7 +69,7 @@ export function runSearch(providers, query, ctx) {
             // Inside the boundary for the same reason search() is: a throw here
             // would otherwise escape into the caller's rebuild loop and leave
             // the list half-built.
-            logError(e, `clipboard-box: provider "${provider.id}" emptyMessage failed`);
+            logError(e, `cboite: provider "${provider.id}" emptyMessage failed`);
             continue;
         }
         if (message) groups.push({ provider, results: [], emptyMessage: message });

@@ -6,7 +6,7 @@ import {
     loadSnippets, saveSnippets, bumpSnippet,
     loadQuicklinks, saveQuicklinks, bumpQuicklink,
     seedQuicklinksOnce, buildUrl, newId, QUICKLINK_SEEDS,
-} from '../clipboard-box@dfxe.github.io/configStore.js';
+} from '../cboite@dfxe.github.io/configStore.js';
 import { suite, it, eq, ok } from './harness.js';
 
 suite('configStore');

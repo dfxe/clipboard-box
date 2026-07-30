@@ -50,16 +50,20 @@ export function descending(pairs, label = '') {
     }
 }
 
-// Run `fn` with the Shell's logError silenced. Several tests deliberately feed
-// bad input to code whose contract is "log it and carry on"; without this the
-// expected stack traces bury the actual result in CI output.
+// Run `fn` with the Shell's logError and log silenced. Several tests
+// deliberately feed bad input to code whose contract is "log it and carry on",
+// and the migration exercises a path that announces itself on success; without
+// this the expected output buries the actual result in CI.
 export function silenced(fn) {
-    const real = globalThis.logError;
+    const realError = globalThis.logError;
+    const realLog = globalThis.log;
     globalThis.logError = () => {};
+    globalThis.log = () => {};
     try {
         return fn();
     } finally {
-        globalThis.logError = real;
+        globalThis.logError = realError;
+        globalThis.log = realLog;
     }
 }
 

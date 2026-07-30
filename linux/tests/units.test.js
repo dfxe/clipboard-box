@@ -1,4 +1,4 @@
-import { lookupUnit, convertUnits } from '../clipboard-box@dfxe.github.io/units.js';
+import { lookupUnit, convertUnits } from '../cboite@dfxe.github.io/units.js';
 import { suite, it, eq, ok } from './harness.js';
 
 suite('units');

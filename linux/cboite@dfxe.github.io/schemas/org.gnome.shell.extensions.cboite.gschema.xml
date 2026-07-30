@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.clipboard-box"
-          path="/org/gnome/shell/extensions/clipboard-box/">
+  <schema id="org.gnome.shell.extensions.cboite"
+          path="/org/gnome/shell/extensions/cboite/">
 
     <key name="max-items" type="i">
       <default>200</default>
@@ -93,7 +93,7 @@
     <key name="currency-api-url" type="s">
       <default>'https://api.frankfurter.app/latest?from=USD'</default>
       <summary>Exchange rate endpoint</summary>
-      <description>Fetched at most twice a day, and only when a currency conversion is actually typed. Results are cached in ~/.local/share/clipboard-box/rates.json.</description>
+      <description>Fetched at most twice a day, and only when a currency conversion is actually typed. Results are cached in ~/.local/share/cboite/rates.json.</description>
     </key>
 
     <key name="auto-paste" type="b">
@@ -124,7 +124,7 @@
     <key name="toggle-menu" type="as">
       <default>[]</default>
       <summary>Open the clipboard menu</summary>
-      <description>Keyboard shortcut that toggles the clipboard-box popup.</description>
+      <description>Keyboard shortcut that toggles the cboite popup.</description>
     </key>
 
     <key name="capture-area" type="as">

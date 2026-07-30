@@ -74,7 +74,7 @@ function revealInFiles(path) {
         const dir = GLib.path_get_dirname(path);
         Gio.AppInfo.launch_default_for_uri(`file://${dir}`, null);
     } catch (e) {
-        Main.notifyError('clipboard-box', e.message ?? String(e));
+        Main.notifyError('cBoite', e.message ?? String(e));
     }
 }
 
@@ -138,7 +138,7 @@ function iconButton(iconName, styleClass, onClick) {
 const Indicator = GObject.registerClass(
 class Indicator extends PanelMenu.Button {
     _init() {
-        super._init(0.0, 'clipboard-box');
+        super._init(0.0, 'cBoite');
 
         this._vault = null;
         this._screenshots = null;
@@ -474,7 +474,7 @@ class Indicator extends PanelMenu.Button {
     // gone there's no in-UI way back, so the notification has to carry it.
     _quit() {
         if (!this._uuid) return;
-        Main.notify('clipboard-box',
+        Main.notify('cBoite',
             `Turned off. Re-enable with: gnome-extensions enable ${this._uuid}`);
         Gio.DBus.session.call(
             'org.gnome.Shell', '/org/gnome/Shell', 'org.gnome.Shell.Extensions',
@@ -709,7 +709,7 @@ class Indicator extends PanelMenu.Button {
         const onDone = (pathUsed, err) => {
             if (err || !pathUsed) {
                 if (err && err.message?.includes('cancel')) return; // user aborted SelectArea
-                Main.notifyError('clipboard-box', err?.message ?? 'Screenshot failed');
+                Main.notifyError('cBoite', err?.message ?? 'Screenshot failed');
                 return;
             }
             this._ingestCaptured(pathUsed);
@@ -732,14 +732,14 @@ class Indicator extends PanelMenu.Button {
             if (item) this._monitor?.ignore(item.fingerprint);
             St.Clipboard.get_default().set_content(
                 St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
-            Main.notify('clipboard-box', `Captured ${base}`);
+            Main.notify('cBoite', `Captured ${base}`);
         });
     }
 
     _pickColor() {
         ColorPicker.pickColor((hex, err) => {
             if (err) {
-                Main.notifyError('clipboard-box', err.message ?? 'Color pick failed');
+                Main.notifyError('cBoite', err.message ?? 'Color pick failed');
                 return;
             }
             // No hex and no error means Escape or a right click — stay as quiet
@@ -756,7 +756,7 @@ class Indicator extends PanelMenu.Button {
         // colour into whatever happens to have focus is not what anyone means
         // by "pick a colour".
         ingestText(hex, { ...this._ctx(), requestPaste: null }, { store: true, title: hex });
-        Main.notify('clipboard-box', `Copied ${hex}`);
+        Main.notify('cBoite', `Copied ${hex}`);
     }
 
     // Confirm a copy on the row the user actually clicked: highlight the row,
@@ -858,7 +858,7 @@ class Indicator extends PanelMenu.Button {
         try {
             return this._buildVisual(visual);
         } catch (e) {
-            logError(e, 'clipboard-box: could not build row visual');
+            logError(e, 'cboite: could not build row visual');
             return new St.Icon({
                 icon_name: 'text-x-generic-symbolic',
                 icon_size: visual?.size ?? 32, style_class: 'cb-thumb',
@@ -937,7 +937,7 @@ class Indicator extends PanelMenu.Button {
                     try {
                         outcome = action.run(this._ctx());
                     } catch (e) {
-                        logError(e, `clipboard-box: row action on "${result.id}" failed`);
+                        logError(e, `cboite: row action on "${result.id}" failed`);
                         this._resumeRefresh();
                         return;
                     }
@@ -974,7 +974,7 @@ class Indicator extends PanelMenu.Button {
             } catch (e) {
                 // Uncaught, this escapes into Clutter's click handler and
                 // leaves the popup with no flash and no close.
-                logError(e, `clipboard-box: result "${result.id}" failed`);
+                logError(e, `cboite: result "${result.id}" failed`);
                 this._resumeRefresh();
                 return;
             }
@@ -1005,7 +1005,7 @@ class Indicator extends PanelMenu.Button {
     }
 });
 
-export default class ClipboardBoxExtension extends Extension {
+export default class CBoiteExtension extends Extension {
     enable() {
         // The ESM modules stay loaded across disable/enable, so clear any state
         // that survived a teardown which threw partway through.
@@ -1074,7 +1074,7 @@ export default class ClipboardBoxExtension extends Extension {
         if (GLib.find_program_in_path(wayland ? 'wl-paste' : 'xclip')) return;
         this._warnId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._warnId = 0;
-            Main.notify('clipboard-box',
+            Main.notify('cBoite',
                 `Install ${wayland ? 'wl-clipboard' : 'xclip'} so terminal apps can ` +
                 'paste clipboard images with Ctrl+V.');
             this._settings?.set_boolean('clipboard-helper-warned', true);
@@ -1091,7 +1091,7 @@ export default class ClipboardBoxExtension extends Extension {
         if (!failure) return;
         this._vaultWarnId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._vaultWarnId = 0;
-            Main.notifyError('clipboard-box', failure.archivedTo
+            Main.notifyError('cBoite', failure.archivedTo
                 ? `History could not be read and was saved to ${failure.archivedTo}. Starting empty.`
                 : 'History could not be read. Nothing new will be saved until ' +
                   'vault.json is repaired or removed.');

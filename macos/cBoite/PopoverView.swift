@@ -60,14 +60,14 @@ struct PopoverView: View {
                 } label: {
                     Label("Area", systemImage: "camera.viewfinder")
                 }
-                .help("Capture an area into ClipboardBox (Control-Option-S)")
+                .help("Capture an area into cBoite (Control-Option-S)")
 
                 Button {
                     store.captureScreenshot(mode: .fullScreen)
                 } label: {
                     Label("Screen", systemImage: "display")
                 }
-                .help("Capture the screen into ClipboardBox")
+                .help("Capture the screen into cBoite")
 
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .buttonStyle(.borderless)

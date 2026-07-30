@@ -3,8 +3,8 @@
    UI, it reproduces it.
  *
  * Where a number below looks arbitrary it was read off the real thing —
- * linux/clipboard-box@dfxe.github.io/stylesheet.css for the GNOME rows and
- * macos/ClipboardBox/PopoverView.swift for the popover — so a change to either
+ * linux/cboite@dfxe.github.io/stylesheet.css for the GNOME rows and
+ * macos/cBoite/PopoverView.swift for the popover — so a change to either
  * has one obvious place to land here. The values that came across:
  *
  *   .cb-row        6px radius            .cb-thumb   4px radius, 12px margin

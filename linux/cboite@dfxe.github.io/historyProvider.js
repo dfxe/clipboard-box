@@ -46,7 +46,7 @@ function recopy(it, ctx) {
         try { [ok, bytes] = file.load_contents_finish(res); }
         catch (_) { ok = false; }
         if (!ok) {
-            Main.notifyError('clipboard-box', 'Image is no longer available');
+            Main.notifyError('cBoite', 'Image is no longer available');
             return;
         }
         clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));

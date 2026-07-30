@@ -50,7 +50,7 @@ export function copyPngFile(path, monitor, onDone) {
         try {
             const [ok, bytes] = file.load_contents_finish(res);
             if (!ok) {
-                Main.notifyError('clipboard-box', `Could not read ${base}`);
+                Main.notifyError('cBoite', `Could not read ${base}`);
                 return;
             }
             // Unlike the vault paths there is no stored fingerprint to reuse —
@@ -62,7 +62,7 @@ export function copyPngFile(path, monitor, onDone) {
                 St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
             onDone?.();
         } catch (e) {
-            Main.notifyError('clipboard-box', e.message ?? String(e));
+            Main.notifyError('cBoite', e.message ?? String(e));
         }
     });
 }

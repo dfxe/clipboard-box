@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>ClipboardBox</string>
+    <string>cBoite</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.dfxe.clipboard-box</string>
+    <string>io.github.dfxe.cboite</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>ClipboardBox</string>
+    <string>cBoite</string>
     <key>CFBundleDisplayName</key>
-    <string>clipboard-box</string>
+    <string>cboite</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

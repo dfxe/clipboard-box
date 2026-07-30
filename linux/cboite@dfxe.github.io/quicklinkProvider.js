@@ -1,6 +1,6 @@
 // Quicklinks: keyword-prefixed searches that open in the browser.
 //
-//   "gh clipboard box"  ->  github.com/search?q=clipboard%20box
+//   "gh cboite"  ->  github.com/search?q=cboite
 //   "github"            ->  matches the quicklink by name
 //
 // Unlike every other provider this one doesn't touch the clipboard — opening a
@@ -19,7 +19,7 @@ function open(url) {
     try {
         Gio.AppInfo.launch_default_for_uri(url, null);
     } catch (e) {
-        Main.notifyError('clipboard-box', e.message ?? String(e));
+        Main.notifyError('cBoite', e.message ?? String(e));
     }
 }
 

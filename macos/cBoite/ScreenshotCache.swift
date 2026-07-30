@@ -1,6 +1,6 @@
 import Foundation
 
-// On-disk cache inside ClipboardBox's Application Support directory.
+// On-disk cache inside cBoite's Application Support directory.
 @MainActor
 final class ScreenshotCache {
     private let dir: URL
@@ -8,13 +8,7 @@ final class ScreenshotCache {
 
     init(limit: Int = 10) {
         self.limit = limit
-        let support = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        dir = support
-            .appendingPathComponent("clipboard-box", isDirectory: true)
-            .appendingPathComponent("cache", isDirectory: true)
+        dir = DataDirectory.url.appendingPathComponent("cache", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
 

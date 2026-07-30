@@ -12,14 +12,14 @@
 set -eu
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-ext="$here/../clipboard-box@dfxe.github.io"
+ext="$here/../cboite@dfxe.github.io"
 
 if ! command -v node >/dev/null 2>&1; then
     echo "  node not found — skipping parse check"
     exit 0
 fi
 
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/clipboard-box-parse.XXXXXX")
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/cboite-parse.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 status=0

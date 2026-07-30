@@ -1,14 +1,14 @@
-# 📋 clipboard-box
+# 📋 cBoite
 
-**Your clipboard, boxed up.** A top-bar vault that remembers everything you copy
-or screenshot — on macOS *and* GNOME.
+**Everything you copy, within reach.** A top-bar vault for your clipboard
+history and recent screenshots — on macOS *and* GNOME.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)
 ![GNOME 45-49](https://img.shields.io/badge/GNOME-45--49-4A86CF)
 ![license MIT](https://img.shields.io/badge/license-MIT-green)
-[![website](https://img.shields.io/badge/website-dfxe.github.io%2Fclipboard--box-f0f0ea)](https://dfxe.github.io/clipboard-box)
+[![website](https://img.shields.io/badge/website-dfxe.github.io%2Fcboite-f0f0ea)](https://dfxe.github.io/cboite)
 
-Your system clipboard remembers exactly one thing. clipboard-box keeps the last
+Your system clipboard remembers exactly one thing. cBoite keeps the last
 few hundred, puts your recent screenshots next to them, and hands any of it back
 with a click. On GNOME it also does the handful of things people actually open
 Raycast for — snippets, a calculator, quicklinks, an emoji picker — from the
@@ -68,18 +68,18 @@ third-party dependencies.
 ```sh
 cd macos
 ./build.sh
-open build/ClipboardBox.app
+open build/cBoite.app
 ```
 
 **GNOME** — no build step, but the bundled GSettings schema must be compiled once
 (and again whenever it changes).
 
 ```sh
-glib-compile-schemas "linux/clipboard-box@dfxe.github.io/schemas/"
+glib-compile-schemas "linux/cboite@dfxe.github.io/schemas/"
 mkdir -p ~/.local/share/gnome-shell/extensions
-ln -s "$PWD/linux/clipboard-box@dfxe.github.io" ~/.local/share/gnome-shell/extensions/
+ln -s "$PWD/linux/cboite@dfxe.github.io" ~/.local/share/gnome-shell/extensions/
 # X11: Alt+F2 → r → Enter.   Wayland: log out and back in.
-gnome-extensions enable clipboard-box@dfxe.github.io
+gnome-extensions enable cboite@dfxe.github.io
 ```
 
 ## 🍎 macOS
@@ -96,7 +96,7 @@ and it lands in the popover; click a row to select it for the next paste.
 None of these are configurable.
 
 > ⚠️ **The native screenshot shortcuts are swallowed, not shared.** While
-> ClipboardBox runs, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS, including the `⇧⌘5`
+> cBoite runs, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS, including the `⇧⌘5`
 > toolbar. Quit to get them back.
 
 `⌘V` is intercepted globally: the app swallows the keystroke, puts the selected
@@ -114,7 +114,7 @@ The popover has a Pause toggle, Area, Screen and Quit, and nothing else.
 - Images are base64-inline in `vault.json` with no size cap, so a history of
   Retina screenshots gets very large.
 - To wipe: quit, then
-  `rm ~/Library/Application\ Support/clipboard-box/vault.json`.
+  `rm ~/Library/Application\ Support/cboite/vault.json`.
 
 ## 🐧 GNOME
 
@@ -151,7 +151,7 @@ Activating a row copies it **and** sends `Ctrl+V` to the window that had focus
 - **Snippets** — searched by keyword, label or body, with `{date}`, `{time}`,
   `{clipboard}`, `{uuid}` and `{cursor}` placeholders (`{date:%d %b %Y}` takes
   any `strftime` format). Every text row has a **Save as snippet** button.
-- **Quicklinks** — `gh clipboard box` opens a GitHub search; typing `github`
+- **Quicklinks** — `gh cboite` opens a GitHub search; typing `github`
   finds it by name. Nine are set up on first run and stay deleted if you delete
   them; a **Search the web for…** row catches the rest.
 - **Emoji & symbols** — recently-used first, plus arrows, maths, Greek, currency
@@ -177,10 +177,25 @@ directly. Terminals shell out to a helper, so `Ctrl+V` there needs `xclip` (X11)
 or `wl-clipboard` (Wayland). Every image row also has a **link** button that
 copies the *path* instead — no helper needed, and it works over SSH.
 
+### Upgrading from clipboard-box
+
+The project was called `clipboard-box` until it wasn't, and the rename moved both
+the extension UUID and the data directory. History, images and cached rates
+migrate themselves the first time the new build runs. Snippets and quicklinks
+live in dconf under the old schema path, so they need one line — run it **before**
+removing the old extension:
+
+```sh
+dconf dump /org/gnome/shell/extensions/clipboard-box/ \
+  | dconf load /org/gnome/shell/extensions/cboite/
+gnome-extensions disable clipboard-box@dfxe.github.io
+rm ~/.local/share/gnome-shell/extensions/clipboard-box@dfxe.github.io
+```
+
 ### Preferences
 
 ```sh
-gnome-extensions prefs clipboard-box@dfxe.github.io
+gnome-extensions prefs cboite@dfxe.github.io
 ```
 
 Four pages: **General**, **Tools**, **Snippets** and **Quicklinks**. Edits reach
@@ -213,7 +228,7 @@ The only feature that makes a network request, and **off by default** — with i
 off nothing is ever fetched. With it on, rates come from `api.frankfurter.app`
 (ECB daily reference rates, no API key, configurable endpoint), fetched only when
 you type a conversion and at most once every 12 hours, then cached to
-`~/.local/share/clipboard-box/rates.json` so offline you get the cached rates
+`~/.local/share/cboite/rates.json` so offline you get the cached rates
 with their age shown. Only the currency codes are implied by the request.
 
 ## 🔒 Storage & privacy
@@ -222,11 +237,11 @@ Everything is local. The opt-in exchange-rate fetch is the only outbound request
 
 |                     | macOS                                                       | GNOME                                        |
 | ------------------- | ----------------------------------------------------------- | -------------------------------------------- |
-| History             | `~/Library/Application Support/clipboard-box/vault.json`     | `~/.local/share/clipboard-box/vault.json`     |
-| Images              | inline, base64 in `vault.json`                               | `~/.local/share/clipboard-box/images/*.png`   |
-| Screenshots         | `~/Library/Application Support/clipboard-box/synced-screenshots/` | `~/Pictures/Screenshots/`               |
+| History             | `~/Library/Application Support/cboite/vault.json`     | `~/.local/share/cboite/vault.json`     |
+| Images              | inline, base64 in `vault.json`                               | `~/.local/share/cboite/images/*.png`   |
+| Screenshots         | `~/Library/Application Support/cboite/synced-screenshots/` | `~/Pictures/Screenshots/`               |
 | Snippets, quicklinks | —                                                          | GSettings (`dconf`), as JSON strings          |
-| Cached rates        | —                                                            | `~/.local/share/clipboard-box/rates.json`     |
+| Cached rates        | —                                                            | `~/.local/share/cboite/rates.json`     |
 | File perms          | `0600`                                                       | `0600` / `0700`                               |
 
 Snippets live in GSettings so an edit in the preferences window — a separate
@@ -284,7 +299,7 @@ responding to clicks.
 
 ### The website
 
-[dfxe.github.io/clipboard-box](https://dfxe.github.io/clipboard-box) is built
+[dfxe.github.io/cboite](https://dfxe.github.io/cboite) is built
 from this file: `docs/build.mjs` lifts the tagline, lede, support matrix and
 quick start into `docs/index.template.html`, so the page has no prose of its own
 to fall out of date. A push to `main` redeploys it.

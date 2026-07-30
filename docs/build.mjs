@@ -285,6 +285,64 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;');
 }
 
+// ─── The 12px floor ────────────────────────────────────────────────────────
+
+// No text on the page may render below this. Enforced by measuring the built
+// page rather than by reading the stylesheet, because the sizes are in rem and
+// clamp() and the only number that matters is the one that reaches the screen.
+const MIN_FONT_PX = 12;
+
+async function checkFontFloor() {
+    const { chromium } = await import('playwright');
+
+    const browser = await chromium.launch();
+    try {
+        const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+        await page.goto(pathToFileURL(join(SITE, 'index.html')).href, { waitUntil: 'load' });
+        await page.evaluate(() => document.fonts.ready);
+
+        const tooSmall = await page.evaluate(min => {
+            const found = [];
+            for (const el of document.body.querySelectorAll('*')) {
+                // Only leaves hold text; a wrapper's font-size is inherited by
+                // children that may override it. And aria-hidden marks
+                // decoration, which is exempt by decision.
+                if (el.closest('[aria-hidden="true"]')) continue;
+                const text = Array.from(el.childNodes)
+                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent.trim())
+                    .join('');
+                if (!text) continue;
+
+                const px = parseFloat(getComputedStyle(el).fontSize);
+                if (px < min) {
+                    found.push({
+                        tag: el.tagName.toLowerCase(),
+                        cls: el.className || '',
+                        px,
+                        sample: text.slice(0, 40),
+                    });
+                }
+            }
+            return found;
+        }, MIN_FONT_PX);
+
+        if (tooSmall.length) {
+            console.error(`Text below the ${MIN_FONT_PX}px floor:\n`);
+            for (const f of tooSmall) {
+                const where = f.cls ? `${f.tag}.${f.cls}` : f.tag;
+                console.error(`  ${f.px}px  ${where}  "${f.sample}"`);
+            }
+            console.error('');
+            throw new Error(`${tooSmall.length} element(s) render text below ${MIN_FONT_PX}px.`);
+        }
+
+        console.log(`  check every text node renders at ${MIN_FONT_PX}px or larger`);
+    } finally {
+        await browser.close();
+    }
+}
+
 // ─── Screenshots ───────────────────────────────────────────────────────────
 
 async function renderShots() {
@@ -435,6 +493,8 @@ async function build() {
     }
 
     console.log(`  site  docs/_site/index.html  (+ ${SHOT_LIST.length} images)`);
+
+    await checkFontFloor();
 }
 
 const mode = process.argv[2];

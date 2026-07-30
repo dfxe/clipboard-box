@@ -1,6 +1,6 @@
 // Exchange rates for the calculator's currency conversions.
 //
-// This is the only part of clipboard-box that touches the network, and it is
+// This is the only part of cboite that touches the network, and it is
 // OFF by default. Nothing here runs unless the user turns on `currency-enabled`
 // AND actually types a currency query — there is no background timer and no
 // fetch at enable().
@@ -12,6 +12,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
+
+import { dataDir } from './dataDir.js';
 
 // ECB reference rates by way of frankfurter.app: no API key, no signup, no
 // per-client rate limit, and a stable JSON shape. The endpoint is a setting so
@@ -31,8 +33,7 @@ let _loaded = false;    // has the on-disk cache been consulted this process?
 let _inFlight = false;
 
 function cachePath() {
-    return GLib.build_filenamev([
-        GLib.get_user_data_dir(), 'clipboard-box', CACHE_NAME]);
+    return GLib.build_filenamev([dataDir(), CACHE_NAME]);
 }
 
 function readCache() {
@@ -45,19 +46,18 @@ function readCache() {
         if (!parsed?.rates || !parsed?.base) return null;
         return parsed;
     } catch (e) {
-        log(`clipboard-box: unreadable rate cache (${e.message})`);
+        log(`cboite: unreadable rate cache (${e.message})`);
         return null;
     }
 }
 
 function writeCache(table) {
     try {
-        const dir = GLib.build_filenamev([GLib.get_user_data_dir(), 'clipboard-box']);
-        GLib.mkdir_with_parents(dir, 0o700);
+        GLib.mkdir_with_parents(dataDir(), 0o700);
         GLib.file_set_contents(cachePath(),
             new TextEncoder().encode(JSON.stringify(table, null, 2)));
     } catch (e) {
-        log(`clipboard-box: could not cache rates (${e.message})`);
+        log(`cboite: could not cache rates (${e.message})`);
     }
 }
 
@@ -154,7 +154,7 @@ export function ratesFor(settings, onRefresh, codes = null) {
                 // Silent in the UI: a flaky network must not throw a
                 // notification on every keystroke. The stale table is still
                 // returned above, labelled with its age.
-                log(`clipboard-box: rate refresh failed (${error.message})`);
+                log(`cboite: rate refresh failed (${error.message})`);
                 return;
             }
             onRefresh?.();

@@ -10,9 +10,9 @@
 set -eu
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-sandbox=$(mktemp -d "${TMPDIR:-/tmp}/clipboard-box-tests.XXXXXX")
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/cboite-tests.XXXXXX")
 trap 'rm -rf "$sandbox"' EXIT INT TERM
 
 XDG_DATA_HOME="$sandbox" \
-CLIPBOARD_BOX_TEST_SANDBOX=1 \
+CBOITE_TEST_SANDBOX=1 \
 exec gjs -m "$here/run.js"

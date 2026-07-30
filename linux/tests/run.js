@@ -16,6 +16,7 @@ import './format.test.js';
 import './calc.test.js';
 import './configStore.test.js';
 import './searchRegistry.test.js';
+import './dataDir.test.js';
 import './vaultStore.test.js';
 
 import { report } from './harness.js';

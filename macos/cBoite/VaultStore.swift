@@ -46,15 +46,9 @@ final class VaultStore: ObservableObject {
     private let vaultURL: URL
 
     init() {
-        // Falling back rather than force-unwrapping: an empty search result here
-        // is unlikely but crashes the app at launch, which is a poor trade for
-        // one saved line.
-        let support = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        let dir = support.appendingPathComponent("clipboard-box", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Resolving this also migrates a directory left over from before the
+        // rename, and creates it if absent — see DataDirectory.
+        let dir = DataDirectory.url
         vaultURL = dir.appendingPathComponent("vault.json")
         syncedScreenshotsDir = dir.appendingPathComponent("synced-screenshots", isDirectory: true)
         try? FileManager.default.createDirectory(at: syncedScreenshotsDir, withIntermediateDirectories: true)
@@ -97,7 +91,7 @@ final class VaultStore: ObservableObject {
 
     func captureScreenshot(mode: ScreenshotCaptureMode) {
         let outputURL = nextCapturedScreenshotURL()
-        setCaptureStatus(mode == .interactive ? "Select an area to save into ClipboardBox." : "Capturing screenshot...")
+        setCaptureStatus(mode == .interactive ? "Select an area to save into cBoite." : "Capturing screenshot...")
 
         Task.detached(priority: .userInitiated) { [outputURL] in
             let didCapture = Self.runScreencapture(mode: mode, outputURL: outputURL)
@@ -274,7 +268,7 @@ final class VaultStore: ObservableObject {
         else { return }
 
         _ = copyToPasteboard(vaultItem)
-        setCaptureStatus("Screenshot saved in ClipboardBox.")
+        setCaptureStatus("Screenshot saved in cBoite.")
     }
 
     private func setCaptureStatus(_ message: String?) {
@@ -312,7 +306,7 @@ final class VaultStore: ObservableObject {
                 // session. A session that saves nothing beats one that destroys
                 // recoverable history.
                 loadFailed = true
-                NSLog("clipboard-box: vault.json unreadable and could not be archived: \(error)")
+                NSLog("cboite: vault.json unreadable and could not be archived: \(error)")
                 setCaptureStatus("History could not be read. Nothing will be saved this session.")
             }
             return
@@ -334,7 +328,7 @@ final class VaultStore: ObservableObject {
         } catch {
             // Previously both the encode and the write error were discarded, so
             // a full disk meant history silently stopped persisting.
-            NSLog("clipboard-box: could not save vault.json: \(error)")
+            NSLog("cboite: could not save vault.json: \(error)")
             setCaptureStatus("History could not be saved to disk.")
         }
     }

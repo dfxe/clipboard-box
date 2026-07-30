@@ -1,5 +1,5 @@
 {
-  "name": "clipboard-box-docs",
+  "name": "cboite-docs",
   "version": "0.0.0",
   "private": true,
   "description": "Build tooling for the GitHub Pages site. Scoped to docs/ so the extension and its tests stay dependency-free.",

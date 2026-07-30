@@ -11,12 +11,12 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>clipboard-box — your clipboard, boxed up</title>
+        <title>cBoite — everything you copy, within reach</title>
         <meta
             name="description"
             content="A top-bar clipboard and screenshot vault for macOS and GNOME. Local, no accounts, no sync."
         />
-        <meta property="og:title" content="clipboard-box" />
+        <meta property="og:title" content="cBoite" />
         <meta
             property="og:description"
             content="A top-bar clipboard and screenshot vault for macOS and GNOME. Local, no accounts, no sync."
@@ -227,7 +227,9 @@
                 margin-top: 10px;
                 color: var(--dim);
                 font-family: var(--mono);
-                font-size: 0.7rem;
+                /* 12px exactly. No text on this page goes below that — the
+                   build measures it (see checkFontFloor in build.mjs). */
+                font-size: 0.75rem;
                 letter-spacing: 0.06em;
                 text-transform: uppercase;
             }
@@ -264,7 +266,7 @@
             th {
                 color: var(--muted);
                 font-family: var(--mono);
-                font-size: 0.7rem;
+                font-size: 0.75rem;
                 font-weight: 400;
                 letter-spacing: 0.08em;
                 text-transform: uppercase;
@@ -390,11 +392,11 @@
                             d="M9.5 9V5.5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2V9z"
                         />
                     </svg>
-                    clipboard-box
+                    cBoite
                 </a>
                 <nav>
                     <span>macOS 13+ · GNOME 45–49</span>
-                    <a href="https://github.com/dfxe/clipboard-box">GitHub</a>
+                    <a href="https://github.com/dfxe/cboite">GitHub</a>
                 </nav>
             </header>
 
@@ -454,8 +456,8 @@
             <footer class="micro">
                 <span>MIT</span>
                 <nav>
-                    <a href="https://github.com/dfxe/clipboard-box">Source</a>
-                    <a href="https://github.com/dfxe/clipboard-box#readme">Docs</a>
+                    <a href="https://github.com/dfxe/cboite">Source</a>
+                    <a href="https://github.com/dfxe/cboite#readme">Docs</a>
                     <a href="https://dfxe.github.io/">dfxe</a>
                 </nav>
             </footer>

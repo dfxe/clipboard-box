@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="ClipboardBox"
-SRC_DIR="ClipboardBox"
+APP_NAME="cBoite"
+SRC_DIR="cBoite"
 BUILD_DIR="build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"

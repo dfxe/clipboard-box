@@ -189,7 +189,7 @@ function multilineRow(field, item, onChange) {
     return row;
 }
 
-export default class ClipboardBoxPreferences extends ExtensionPreferences {
+export default class CBoitePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage({
@@ -407,7 +407,7 @@ export default class ClipboardBoxPreferences extends ExtensionPreferences {
 
         const group = new Adw.PreferencesGroup({
             title: 'Quicklinks',
-            description: 'Type the keyword followed by your search — "gh clipboard box" — '
+            description: 'Type the keyword followed by your search — "gh cboite" — '
                 + 'and press Enter to open it.',
         });
         page.add(group);
