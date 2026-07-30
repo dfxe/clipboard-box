@@ -52,8 +52,18 @@ jobs:
       - name: Build the site
         run: node docs/build.mjs
 
-      # enablement lets the first run turn Pages on by itself. If org policy
-      # blocks that, set Settings -> Pages -> Source to "GitHub Actions" once.
+      # enablement only picks up a Pages site that already exists. It cannot
+      # create one: GITHUB_TOKEN is not allowed to, and the first run of this
+      # workflow failed with "Create Pages site failed / Resource not
+      # accessible by integration" for exactly that reason.
+      #
+      # Enabling it is a one-time manual step — Settings -> Pages -> Source:
+      # "GitHub Actions", or:
+      #
+      #   gh api -X POST repos/dfxe/clipboard-box/pages -f build_type=workflow
+      #
+      # which is what was actually run here. Left in place so that a repo fork
+      # with a Pages site configured needs no edit.
       - uses: actions/configure-pages@v4
         with:
           enablement: true
