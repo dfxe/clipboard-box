@@ -29,6 +29,18 @@ jobs:
       - name: Unit tests
         run: ./linux/tests/run.sh
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # README.md shows the screenshots from docs/shots/, and GitHub renders it
+      # straight from the repo rather than from a build — so an edited mock with
+      # un-regenerated PNGs leaves the README showing the old UI. Hashes the
+      # mock sources rather than the PNGs, which no two chromium builds agree on
+      # byte for byte. Needs nothing installed.
+      - name: Screenshots are current
+        run: node docs/build.mjs --check
+
   macos:
     name: macOS app
     runs-on: macos-latest

@@ -6,6 +6,7 @@ or screenshot — on macOS *and* GNOME.
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)
 ![GNOME 45-49](https://img.shields.io/badge/GNOME-45--49-4A86CF)
 ![license MIT](https://img.shields.io/badge/license-MIT-green)
+[![website](https://img.shields.io/badge/website-dfxe.github.io%2Fclipboard--box-f0f0ea)](https://dfxe.github.io/clipboard-box)
 
 Your system clipboard remembers exactly one thing. clipboard-box keeps the last
 few hundred, puts your recent screenshots next to them, and hands any of it back
@@ -21,6 +22,23 @@ network.
 macos/    Swift + SwiftUI MenuBarExtra app   (macOS 13+, no Xcode project)
 linux/    GNOME Shell extension, GJS / ESM   (GNOME 45–49, no build step)
 ```
+
+## 📸 What it looks like
+
+| GNOME — the command bar | GNOME — history and screenshots |
+| ----------------------- | ------------------------------- |
+| ![The GNOME command bar with "100 km in mi" typed in, showing an Answer row reading 62.1371192237 mi above a matching history entry](docs/shots/gnome-command-bar.png) | ![The GNOME popup at rest, listing a pinned colour swatch, a git command, a screenshot thumbnail and a URL, with a Screenshots section beneath](docs/shots/gnome-history.png) |
+
+The macOS popover is the smaller of the two by design — no pin, no delete, no
+search:
+
+![The macOS menu-bar popover titled Clipboard Vault, listing seven copied items above a footer with Pause, Area, Screen and Quit](docs/shots/macos-popover.png)
+
+> These are **rendered mockups with sample data, not live captures** — the
+> interesting frame of a clipboard vault is one full of whatever its owner last
+> copied. Layout, strings and number formatting are taken from the source; the
+> contents are invented. They are built from `docs/mocks/` by `docs/build.mjs`,
+> described under [The website](#the-website).
 
 ## ✨ At a glance
 
@@ -419,6 +437,11 @@ linux/clipboard-box@dfxe.github.io/
   colorPicker.js                  full-stage eyedropper overlay + hex readout
   prefs.js                        Adwaita preferences window
 linux/tests/                      gjs unit tests + the two runner scripts
+docs/
+  build.mjs                       README → page, and the mockups → PNG
+  index.template.html             the page, minus everything it takes from here
+  mocks/                          HTML replicas of both UIs, with sample data
+  shots/                          the rendered PNGs shown above, committed
 ```
 
 Every clipboard write goes through `clipboardUtil.ingestText()`, which keeps one
@@ -479,6 +502,44 @@ be cleared from the top of **both** `enable()` and `disable()` —
 `ColorPicker.cancelActive()`, `Paste.shutdown()`, `Currency.shutdown()`. A modal
 grab that outlives the extension leaves the session unable to click anything,
 and `ExtensionManager` only *logs* a throw from `disable()`.
+
+### The website
+
+[dfxe.github.io/clipboard-box](https://dfxe.github.io/clipboard-box) is built
+from this file. `docs/build.mjs` lifts four regions out of `README.md` — the
+tagline, the lede, the support matrix and the quick start — and substitutes them
+into `docs/index.template.html`, so the page has no prose of its own to fall out
+of date. Editing the README *is* editing the page; a push to `main` redeploys
+it.
+
+```sh
+npm ci --prefix docs             # once: Playwright, scoped to docs/ so the
+npx --prefix docs playwright install chromium   # extension keeps its promise
+node docs/build.mjs              # renders docs/shots/*.png, then docs/_site/
+```
+
+`docs/_site/` is the published output and is gitignored. `docs/shots/` is not:
+those PNGs are what the screenshots above point at, and GitHub renders this file
+from the repo rather than from a build.
+
+That split is what the CI step guards. `node docs/build.mjs --check` compares a
+hash of everything in `docs/mocks/` against `docs/shots/manifest.json` and fails
+if they disagree — **edit a mock, re-run the build, commit the PNGs**, or the
+site moves on while the README still shows the old UI. It hashes the mock
+sources rather than the PNGs on purpose: two chromium builds do not produce
+identical bytes, so a pixel comparison would fail for no reason.
+
+The renderer handles a deliberately small subset of markdown — paragraphs, bold,
+italics, code, links, fenced blocks and tables — and *throws* on anything else
+rather than emitting it raw. Adding a bullet list to one of the four extracted
+regions will stop the build, which is the intended outcome: silently mangling
+the page is the worse failure. Teach `render()` about the construct, or keep it
+out of those sections.
+
+The mockups pin Cantarell and Inter, which the Pages workflow apt-installs so a
+runner renders them the way a developer machine does. Both are already present
+on a typical GNOME desktop; `sudo apt install fonts-cantarell fonts-inter` if
+not.
 
 ## License
 

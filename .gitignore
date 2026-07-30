@@ -3,3 +3,8 @@ macos/build/
 
 # Built from the .gschema.xml by glib-compile-schemas (see README).
 gschemas.compiled
+
+# The published site, rebuilt from README.md by docs/build.mjs on every push.
+# docs/shots/ is deliberately *not* ignored: the README shows those PNGs.
+docs/_site/
+docs/node_modules/

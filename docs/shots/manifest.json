@@ -1,0 +1,8 @@
+{
+  "mocks": {
+    "gnome-command-bar.html": "904f6d9fa4bb0ec8",
+    "gnome-history.html": "7987224bd3779b6f",
+    "macos-popover.html": "95ea9afa5caef63b",
+    "mock.css": "66fd11c7302c46fd"
+  }
+}
