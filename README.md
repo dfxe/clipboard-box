@@ -29,16 +29,11 @@ linux/    GNOME Shell extension, GJS / ESM   (GNOME 45–49, no build step)
 | ----------------------- | ------------------------------- |
 | ![The GNOME command bar with "100 km in mi" typed in, showing an Answer row reading 62.1371192237 mi above a matching history entry](docs/shots/gnome-command-bar.png) | ![The GNOME popup at rest, listing a pinned colour swatch, a git command, a screenshot thumbnail and a URL, with a Screenshots section beneath](docs/shots/gnome-history.png) |
 
-The macOS popover is the smaller of the two by design — no pin, no delete, no
-search:
-
 ![The macOS menu-bar popover titled Clipboard Vault, listing seven copied items above a footer with Pause, Area, Screen and Quit](docs/shots/macos-popover.png)
 
-> These are **rendered mockups with sample data, not live captures** — the
-> interesting frame of a clipboard vault is one full of whatever its owner last
-> copied. Layout, strings and number formatting are taken from the source; the
-> contents are invented. They are built from `docs/mocks/` by `docs/build.mjs`,
-> described under [The website](#the-website).
+> **Rendered mockups with sample data, not live captures.** Layout, strings and
+> number formatting come from the source; the contents are invented. Built from
+> `docs/mocks/` by `docs/build.mjs` — see [The website](#the-website).
 
 ## ✨ At a glance
 
@@ -89,11 +84,8 @@ gnome-extensions enable clipboard-box@dfxe.github.io
 
 ## 🍎 macOS
 
-A vault icon appears in the menu bar. There's no Dock icon (`LSUIElement`). Copy
-text or images as usual and they land in the popover; click a row to select it
-for the next paste.
-
-### Shortcuts
+A vault icon appears in the menu bar; no Dock icon (`LSUIElement`). Copy as usual
+and it lands in the popover; click a row to select it for the next paste.
 
 | Shortcut                | Does                                                      |
 | ----------------------- | --------------------------------------------------------- |
@@ -101,78 +93,38 @@ for the next paste.
 | `⌃⌥S`                   | Capture an area into the vault                             |
 | `⇧⌘3` / `⇧⌘4` / `⇧⌘5`   | Capture — **replaces** the native macOS screenshot UI      |
 
-> ⚠️ **The native screenshot shortcuts are swallowed, not shared.** While
-> ClipboardBox is running, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS — including the
-> `⇧⌘5` toolbar with its recording and timer options. Quit ClipboardBox to get
-> them back.
-
 None of these are configurable.
 
-### How the paste override works
+> ⚠️ **The native screenshot shortcuts are swallowed, not shared.** While
+> ClipboardBox runs, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS, including the `⇧⌘5`
+> toolbar. Quit to get them back.
 
-`⌘V` is intercepted globally. The app swallows your keystroke, places the
-selected history item on the pasteboard just in time, synthesizes a fresh paste
-into the target app, then wipes the pasteboard ~350 ms later if it still holds
-that item. The practical effect: while ClipboardBox runs with permissions, the
-system pasteboard sits empty and every paste is routed through the vault.
-
-This needs **Accessibility** permission. On first launch, approve ClipboardBox
-under **System Settings → Privacy & Security → Accessibility**. Without it the
-app degrades gracefully — `⌘V` behaves normally and the pasteboard is left alone.
-
-### Screenshots
-
-Capture with `⌃⌥S`, the intercepted native shortcuts, or the **Area** / **Screen**
-buttons in the popover. Shots are written straight into the app's own storage,
-selected in the vault, and copied to the pasteboard. ClipboardBox never scans
-Desktop, Documents, Downloads, Pictures, or the rest of `$HOME`.
-
-### Launch on login
-
-Drag `build/ClipboardBox.app` to `/Applications`, then add it under
-**System Settings → General → Login Items**.
+`⌘V` is intercepted globally: the app swallows the keystroke, puts the selected
+item on the pasteboard just in time, synthesizes a paste, then wipes it ~350 ms
+later — so the pasteboard sits empty and every paste routes through the vault.
+Needs **Accessibility** permission; without it `⌘V` behaves normally. Screenshots
+go into the app's own storage, and it never scans `$HOME`.
 
 ### Current limits
 
-The macOS build is deliberately minimal — the popover has a Pause toggle, Area,
-Screen, and Quit, and nothing else:
+The popover has a Pause toggle, Area, Screen and Quit, and nothing else.
 
-- No per-item delete, no "clear history", no pin, no search.
-- History is capped at 200 entries; oldest are dropped. Not configurable.
-- There is no image size cap, and images are stored base64-inline in
-  `vault.json` rather than as sidecar files the way GNOME does — so a history
-  full of Retina screenshots makes for a very large file.
-- Anything on the pasteboard that isn't text or an image (RTF, app-specific
-  flavors) still gets stored as a generic entry, unless it carries one of the
-  privacy hints below.
-- To wipe history, quit the app and delete the file:
-  ```sh
-  rm ~/Library/Application\ Support/clipboard-box/vault.json
-  ```
+- No per-item delete, no clear-history, no pin, no search.
+- History capped at 200 entries, oldest dropped. Not configurable.
+- Images are base64-inline in `vault.json` with no size cap, so a history of
+  Retina screenshots gets very large.
+- To wipe: quit, then
+  `rm ~/Library/Application\ Support/clipboard-box/vault.json`.
 
 ## 🐧 GNOME
 
 A clipboard icon appears in the top panel. Copy text or an image and it shows up
-under **Clipboard history**; press `PrtScn` and it shows up under **Screenshots**.
-Click any entry to copy it back — or just start typing.
+under **Clipboard history**; `PrtScn` shots show under **Screenshots**.
 
 ### The command bar
 
-The box at the top of the popup searches everything at once and ranks the
-results, with each source under its own heading. It's focused the moment the
-popup opens, so you can type immediately.
-
-```
-┌──────────────────────────────────────┐
-│ 🔍 100 km in mi                      │
-├──────────────────────────────────────┤
-│ ANSWER                               │
-│ 62.1371192237 mi        100 km  Enter│
-├──────────────────────────────────────┤
-│ CLIPBOARD HISTORY                    │
-│ 📄 100 km in mi        Text · 11 B ·…│
-└──────────────────────────────────────┘
-```
+The box at the top searches everything at once and ranks the results, each source
+under its own heading, focused the moment the popup opens.
 
 | Key | Does |
 | --- | --- |
@@ -181,110 +133,49 @@ popup opens, so you can type immediately.
 | `Enter` | Activate the selected row |
 | `Esc` | Clears the query, then leaves a tool, then closes the popup |
 
-Sections appear in a fixed order — **Answer**, **Quicklinks**, **Snippets**,
-**Emoji & symbols**, **Clipboard history**, **Screenshots** — and each is capped
-so no single source can flood the list. With a query, sections that match
-nothing are hidden rather than each printing "No matches".
+Sections are ordered **Answer**, **Quicklinks**, **Snippets**, **Emoji &
+symbols**, **Clipboard history**, **Screenshots** — each capped, and hidden when
+nothing matches. Ranking is shared by every source: exact beats prefix beats word
+boundary beats substring beats loose subsequence (`bgcol` finds
+`background-color`), and shorter matches win ties.
 
-Ranking is shared by every source: an exact match beats a prefix, which beats a
-match at a word boundary, which beats a substring, which beats a loose
-subsequence (`bgcol` still finds `background-color`). Shorter matches win ties,
-which is why typing `g` surfaces the `g` quicklink rather than some history
-entry that happens to contain a *g*.
-
-### Enter pastes
-
-Activating a row copies it **and** sends `Ctrl+V` to the window that had focus,
-so the content lands where you were working. Terminals get `Ctrl+Shift+V`,
-matched on the window class.
-
-If a paste ever lands somewhere unexpected, raise **Paste delay** in
-preferences — the extension has to wait for focus to return to your window, and
-120 ms isn't always enough on a loaded machine. Turn **Paste after copying**
-off to go back to copy-only.
+Activating a row copies it **and** sends `Ctrl+V` to the window that had focus
+(`Ctrl+Shift+V` in terminals). If a paste lands somewhere unexpected, raise
+**Paste delay**.
 
 ### Tools
 
-- **Answer** — arithmetic (`2+2*8`, `2^10`, `sqrt(16)`, `max(3,9,2)`), unit
-  conversion (`100 km in mi`, `72f to c`, `2.5 GiB in MB`), percentages
-  (`20% of 300`, `300 + 20%`, `45 as % of 60`) and dates (`today + 30 days`,
-  `days until 2026-12-25`). Answers are kept in history — you usually want the
-  number again a minute later. There is no `eval()` anywhere in this: the
-  expression parser is hand-written, because this code runs inside the
-  compositor process.
-
-- **Snippets** — saved blocks of text, searched by keyword, label or body. The
-  body can contain `{date}`, `{time}`, `{clipboard}`, `{uuid}` and `{cursor}`;
-  `{date:%d %b %Y}` takes any `strftime` format. Every text row in history has a
-  **Save as snippet** button, which is how most snippets actually get made.
-
-  `{cursor}` walks the caret back after pasting by sending arrow keys. It works
-  in a plain text field; an editor that autocompletes or reindents after the
-  paste will land it somewhere else. It needs pasting turned on, and is ignored
-  beyond 200 characters.
-
-- **Quicklinks** — type a keyword and your search: `gh clipboard box` opens a
-  GitHub search. Typing `github` finds it by name instead. Google, DuckDuckGo,
-  GitHub, YouTube, Wikipedia, Stack Overflow, npm, MDN and Translate are set up
-  on first run; delete them and they stay deleted. When nothing else matches you
-  get a **Search the web for…** row.
-
-- **Emoji & symbols** — searchable from two characters up, ordered with
-  recently-used first. Alongside emoji it carries arrows, maths, typography,
-  Greek, currency and the invisible characters that are otherwise a nuisance to
-  produce (non-breaking space, zero-width space, em space).
-
-  No emoji data is bundled: GNOME Shell already ships a set for its on-screen
-  keyboard and this reads that, so there's nothing to download and it matches
-  whatever Unicode version your Shell targets. Unicode names make poor search
-  keys, so common nicknames (`lol`, `shrug`, `+1`, `tada`, `lgtm`) are mapped on
-  top.
-
+- **Answer** — arithmetic (`2+2*8`), units (`100 km in mi`), percentages
+  (`20% of 300`) and dates (`today + 30 days`), all kept in history. The parser
+  is hand-written with no `eval()`: this runs inside the compositor process.
+- **Snippets** — searched by keyword, label or body, with `{date}`, `{time}`,
+  `{clipboard}`, `{uuid}` and `{cursor}` placeholders (`{date:%d %b %Y}` takes
+  any `strftime` format). Every text row has a **Save as snippet** button.
+- **Quicklinks** — `gh clipboard box` opens a GitHub search; typing `github`
+  finds it by name. Nine are set up on first run and stay deleted if you delete
+  them; a **Search the web for…** row catches the rest.
+- **Emoji & symbols** — recently-used first, plus arrows, maths, Greek, currency
+  and the invisible characters. No data is bundled: it reads the set GNOME Shell
+  already ships.
 - **Currency** — `100 usd in eur`, **off by default**. See
   [Currency and the network](#currency-and-the-network).
 
 ### The rest
 
-- **History** — watches the compositor's selection-owner signal and records
-  copied text and PNGs, deduplicated by content, newest first (200 by default).
-  Every row has **pin** (sticks to the top, exempt from the cap and from expiry)
-  and **delete**. Copying something again promotes it back to the top.
-- **Search** — the box at the top filters history *and* screenshots as you type.
-  The popup focuses it on open, so you can just start typing.
-- **Pause** — an incognito toggle that stops recording without disabling the
-  extension. Content flagged by a password manager is skipped even when running.
-- **Screenshots** — lists the 10 newest PNGs in `~/Pictures/Screenshots` (where
-  GNOME's `PrtScn` saves), each one click-to-copy.
-- **Capture** — **Area** and **Screen** go through GNOME's own screenshot
-  service, then add the shot to history and copy it to the clipboard.
-- **Color** — an eyedropper. The popup closes, the cursor becomes a crosshair,
-  and a readout follows the pointer showing a swatch and the live `#RRGGBB`
-  under it. Click to copy that hex and store it in history; `Esc` or a
-  right-click cancels. Hex entries show up in the list as a colour swatch.
-- **Quit** — turns the extension off from the popup: panel icon gone, monitoring
-  stopped, shortcuts released. It stays off across a reboot; bring it back with
-  `gnome-extensions enable clipboard-box@dfxe.github.io` or the Extensions app.
+- **History** — text and PNGs, deduplicated, newest first (200 by default). Every
+  row has **pin** (exempt from the cap and from expiry) and **delete**.
+- **Pause** — incognito toggle. Password-manager-flagged content is skipped
+  either way.
+- **Screenshots** — the 10 newest PNGs in `~/Pictures/Screenshots`.
+- **Capture** — **Area** and **Screen** via GNOME's own screenshot service.
+- **Color** — an eyedropper with a live `#RRGGBB` readout. Hex entries show in
+  the list as a colour swatch.
+- **Quit** — turns the extension off from the popup; it stays off across a reboot.
 
-### Pasting into terminal apps
-
-Clicking a row puts real PNG bytes on the clipboard as `image/png`, which GUI
-apps (GIMP, browsers, chat clients) paste directly. Terminal programs can't read
-an X11/Wayland selection themselves — they shell out to a helper binary — so for
-`Ctrl+V` image paste inside a terminal you need one of:
-
-```sh
-sudo apt install xclip          # X11
-sudo apt install wl-clipboard   # Wayland
-```
-
-If neither is installed, the extension says so once in a notification. Without
-one, clicking an image row *looks* like it worked but pasting into a terminal
-does nothing.
-
-Every image and screenshot row also has a **link** button that copies the file's
-*path* as plain text instead of its bytes. That needs no helper binary and works
-over SSH — Claude Code turns a pasted path ending in `.png`/`.jpg`/`.gif`/`.webp`
-into a real image attachment. Path copies aren't added to history.
+Clicking an image row puts real PNG bytes on the clipboard, which GUI apps paste
+directly. Terminals shell out to a helper, so `Ctrl+V` there needs `xclip` (X11)
+or `wl-clipboard` (Wayland). Every image row also has a **link** button that
+copies the *path* instead — no helper needed, and it works over SSH.
 
 ### Preferences
 
@@ -292,9 +183,8 @@ into a real image attachment. Path copies aren't added to history.
 gnome-extensions prefs clipboard-box@dfxe.github.io
 ```
 
-Four pages: **General**, **Tools**, **Snippets** and **Quicklinks**. The last two
-are list editors — a `+` in the group header adds an entry, each row expands to
-its fields, and edits reach the popup immediately without a shell restart.
+Four pages: **General**, **Tools**, **Snippets** and **Quicklinks**. Edits reach
+the popup immediately, without a shell restart.
 
 | Setting                     | Default                  | Effect                                             |
 | --------------------------- | ------------------------ | -------------------------------------------------- |
@@ -312,38 +202,23 @@ its fields, and edits reach the popup immediately without a shell restart.
 | Convert currencies          | **off**                  | The only setting that enables a network request     |
 | Exchange rate endpoint      | frankfurter.app          | ECB daily rates, no API key                         |
 
-Shortcuts — all unbound by default, all taking a raw accelerator string such as
-`<Super><Shift>V` rather than a key-capture widget. Leave one blank to disable:
-**Open clipboard menu**, **Capture area**, **Capture screen**, **Pick color**,
-**Open snippets**, **Open emoji picker**.
-
-The last two open the popup scoped to that one tool, listing everything it has
-before you type anything — recently-used emoji, or your snippets most-used
-first. `Esc` steps back out to the full command bar.
+Shortcuts are all unbound by default and take a raw accelerator string such as
+`<Super><Shift>V`: **Open clipboard menu**, **Capture area**, **Capture
+screen**, **Pick color**, **Open snippets**, **Open emoji picker**. The last two
+open the popup scoped to that one tool.
 
 ### Currency and the network
 
-Currency conversion is the only feature that makes a network request, and it is
-**off by default**. With it off, `100 usd in eur` simply produces no answer row
-and nothing is ever fetched.
-
-With it on:
-
-- Rates come from `api.frankfurter.app` (European Central Bank daily reference
-  rates — no API key, no signup, no account). The endpoint is configurable.
-- A fetch happens only when you actually type a currency conversion, and at most
-  once every 12 hours. There is no background timer and nothing is fetched at
-  startup.
-- Results are cached in `~/.local/share/clipboard-box/rates.json`. Offline, you
-  get the cached rates with their age shown in the row (`rates from 3d ago`)
-  rather than a wrong number or a silent failure.
-- Only the currency codes are implied by the request — no clipboard content, no
-  identifiers, nothing about you.
+The only feature that makes a network request, and **off by default** — with it
+off nothing is ever fetched. With it on, rates come from `api.frankfurter.app`
+(ECB daily reference rates, no API key, configurable endpoint), fetched only when
+you type a conversion and at most once every 12 hours, then cached to
+`~/.local/share/clipboard-box/rates.json` so offline you get the cached rates
+with their age shown. Only the currency codes are implied by the request.
 
 ## 🔒 Storage & privacy
 
-Everything is local. Nothing is uploaded anywhere, and the only outbound request
-the extension can ever make is the opt-in exchange-rate fetch described above.
+Everything is local. The opt-in exchange-rate fetch is the only outbound request.
 
 |                     | macOS                                                       | GNOME                                        |
 | ------------------- | ----------------------------------------------------------- | -------------------------------------------- |
@@ -354,42 +229,24 @@ the extension can ever make is the opt-in exchange-rate fetch described above.
 | Cached rates        | —                                                            | `~/.local/share/clipboard-box/rates.json`     |
 | File perms          | `0600`                                                       | `0600` / `0700`                               |
 
-Snippets live in GSettings rather than in a file because the preferences window
-is a separate process from the Shell — GSettings is what lets an edit show up in
-the popup straight away. Note that `dconf` is **not** `0600`-protected the way
-`vault.json` is, so treat a snippet as no more private than any other desktop
-setting.
+Snippets live in GSettings so an edit in the preferences window — a separate
+process — reaches the popup straight away, but `dconf` is **not** `0600`-protected
+the way `vault.json` is.
 
-**Neither platform encrypts at rest.** History is plain JSON on disk.
+**Neither platform encrypts at rest.** `VaultCrypto.swift` holds a complete
+scheme (Curve25519 ECDH → HKDF-SHA256 → AES-GCM, keys in the Keychain) but
+**nothing calls it yet**, and GNOME's **Encrypt history at rest** toggle is
+likewise inert. Don't copy secrets you wouldn't want written to disk. Both
+platforms skip content a password manager has flagged
+(`org.nspasteboard.ConcealedType` and friends on macOS, `passwordmanagerhint` and
+friends on GNOME), but an app that sets none of them is indistinguishable from
+any other — and macOS also stores unrecognised pasteboard flavors, so it captures
+more than GNOME.
 
-On macOS, `VaultCrypto.swift` contains a complete scheme — Curve25519 ECDH →
-HKDF-SHA256 → AES-GCM, with keys in the Keychain — but **nothing calls it yet**.
-It's scaffolding for a future release, not active protection; don't let its
-presence in the source tree mislead you. The popover says "Local plaintext
-history" for exactly this reason. GNOME has the matching inert **Encrypt history
-at rest** toggle in preferences; GNOME Shell extensions have no native CryptoKit
-equivalent, so a libsecret-backed implementation is future work.
-
-Until then: don't copy secrets you wouldn't want written to disk. Both platforms
-skip content a password manager has flagged, and both give you a pause toggle
-for anything else sensitive. macOS still vacuums up unrecognised pasteboard
-flavors, so it captures more than GNOME does.
-
-The flags honoured are `org.nspasteboard.TransientType`,
-`org.nspasteboard.ConcealedType`, `org.nspasteboard.AutoGeneratedType` and
-`com.agilebits.onepassword` on macOS, and the `passwordmanagerhint`,
-`x-kde-passwordmanagerhint`, `org.freedesktop.secrets` and `concealed` MIME
-hints on GNOME. An app that sets none of them is indistinguishable from any
-other app, on either platform.
-
-**If the history file is ever unreadable it is moved aside, never overwritten.**
-A vault that fails to parse is renamed to `vault.corrupt-<timestamp>.json` and
-the app starts empty; if even that rename fails, nothing is saved for the rest
-of the session rather than writing over what could not be read.
+**An unreadable history file is moved aside, never overwritten** — renamed to
+`vault.corrupt-<timestamp>.json`, and the app starts empty.
 
 ## 🛠 Development
-
-### Tests
 
 ```sh
 linux/tests/run.sh          # unit tests
@@ -397,149 +254,51 @@ linux/tests/parse-check.sh  # syntax-check every module
 ```
 
 No dependencies and no build step: the tested modules import nothing from
-`resource:///`, so they load in plain `gjs` with no Shell and no display.
-`run.sh` points `XDG_DATA_HOME` at a throwaway directory before starting gjs —
-GLib caches the data dir on first use, so this cannot be done from inside the
-test process, and `vaultStore.test.js` refuses to run without it.
+`resource:///`, so they load in plain `gjs` with no Shell and no display. That
+covers `match`, `calc`, `units`, `format`, `configStore`, `searchRegistry` and
+`vaultStore`; everything else imports `St`/`Clutter` and needs a real shell, so
+`parse-check.sh` at least syntax-checks those.
 
-That covers `match`, `calc`, `units`, `format`, `configStore`, `searchRegistry`
-and `vaultStore`. Everything else imports `St`/`Clutter`/`PanelMenu` and can only
-be exercised in a real shell — `parse-check.sh` gives those at least a syntax
-check, which is the mistake that otherwise costs a shell restart to find.
+Four invariants that are easy to break by accident:
 
-The `match.js` tests are worth keeping honest: they pin the exact tier ordering,
-so a change to the scorer that quietly reorders results fails rather than merely
-looking different.
+- **Every clipboard write goes through `clipboardUtil.ingestText()`** — vault
+  first so it owns the fingerprint, tell the monitor to ignore it, *then* write.
+  Wrong order and our own writes return as new history entries.
+- **The monitor's ignore set is consuming.** `.has()` instead of `.delete()`
+  silently drops a later manual copy of the same text.
+- **Nothing runs on the compositor thread that doesn't have to** — providers
+  score pre-normalized text, and vault writes are coalesced and async, which is
+  why `disable()` must call `vault.flush()`.
+- **Rebuilds are suspended while a row is activating**, or the rebuild destroys
+  the row that is about to show its ✓.
 
-```
-macos/build.sh                    swiftc → ad-hoc-signed .app bundle in build/
-macos/ClipboardBox/*.swift        app, vault store, event tap, popover
-linux/clipboard-box@dfxe.github.io/
-  extension.js                    panel indicator, command bar, keyboard nav
-  searchRegistry.js               provider interface, per-source caps
-  match.js                        shared ranking (exact ▸ prefix ▸ word ▸ …)
-  historyProvider.js              clipboard history + screenshots as providers
-  answerProvider.js               the Answer section
-  snippetProvider.js              snippet search + placeholder expansion
-  quicklinkProvider.js            keyword links + web-search fallback
-  emojiProvider.js                emoji/symbol search over the Shell's dataset
-  calc.js                         expression parser, percentages, dates
-  units.js                        unit tables + conversion
-  currency.js                     opt-in async rate fetch + disk cache
-  paste.js                        Ctrl+V injection via a virtual keyboard
-  configStore.js                  snippets/quicklinks in GSettings (shared with prefs)
-  clipboardUtil.js                the single clipboard-write path
-  format.js                       byte/age formatting, hex sniffing
-  clipboardMonitor.js             selection-owner watcher, secret filtering
-  vaultStore.js                   persistence, dedup, pinning, expiry
-  screenshotStore.js              screenshots folder watcher
-  capture.js                      org.gnome.Shell.Screenshot D-Bus client
-  colorPicker.js                  full-stage eyedropper overlay + hex readout
-  prefs.js                        Adwaita preferences window
-linux/tests/                      gjs unit tests + the two runner scripts
-docs/
-  build.mjs                       README → page, and the mockups → PNG
-  index.template.html             the page, minus everything it takes from here
-  mocks/                          HTML replicas of both UIs, with sample data
-  shots/                          the rendered PNGs shown above, committed
-```
-
-Every clipboard write goes through `clipboardUtil.ingestText()`, which keeps one
-invariant in one place: store to the vault first so it owns the fingerprint,
-tell the monitor to ignore that fingerprint, *then* write. Get the order wrong
-and the extension's own writes come straight back in as new history entries.
-
-Three more invariants that are easy to break by accident:
-
-- **The monitor's ignore set is consuming.** `_ignored` swallows exactly one
-  bounce of our own write, then forgets it. Peeking with `.has()` instead of
-  `.delete()` means that once you copy something from the popup, copying the
-  same text by hand later is silently dropped from history.
-- **Nothing runs on the compositor thread that doesn't have to.** GJS extensions
-  live *inside* `gnome-shell`, so per-keystroke work is frame budget. Providers
-  score against pre-normalized text via `match.scorePre` rather than `score`,
-  and the vault's writes are coalesced and asynchronous — which is why
-  `disable()` has to call `vault.flush()`.
-- **Rebuilds are suspended while a row is activating.** `run()` usually mutates a
-  store, and `changed` lands synchronously; without `_suspendRefresh()` the
-  rebuild destroys the very row that is about to show its ✓ confirmation.
-
-Providers are pure and synchronous, so anything expensive they might want —
-notably an exchange-rate lookup — has to be deferred rather than done inline.
-`calc.evaluate` accepts a *function* for `rates` and calls it only once a query
-has parsed as a currency conversion; that is what keeps the opt-in network fetch
-from firing merely because the popup opened.
-
-Adding a tool means writing a provider — `{id, title, cap, search(query, ctx)}`
-returning result descriptors — and appending it to `PROVIDERS` in
-`extension.js`. Providers are pure, synchronous, and never touch `St`: visuals
-are plain data (`{kind: 'icon'|'gicon'|'swatch'|'glyph', …}`) that
-`_makeResultRow` turns into actors.
-
-`build.sh` compiles every `.swift` in one `swiftc` invocation and ad-hoc-signs the
-bundle so Gatekeeper allows it locally. Note that re-signing invalidates the
-Accessibility grant, so you'll re-approve after each rebuild.
-
-Extension JS changes need a **full gnome-shell restart**, not a
-disable/enable — the ESM modules stay loaded across the latter. On X11 that's
-`Alt+F2` → `r` → Enter; on Wayland, log out and back in, or use a nested Shell:
-
-```sh
-dbus-run-session -- gnome-shell --nested --wayland
-```
-
-Enable it inside that session and watch logs with:
-
-```sh
-journalctl -f -o cat | grep -i clipboard
-```
-
-Any change under `schemas/` needs `glib-compile-schemas schemas/` before that
-restart, or the new keys read as missing and `enable()` throws.
-
-Because the modules survive disable/enable, anything holding a resource has to
-be cleared from the top of **both** `enable()` and `disable()` —
-`ColorPicker.cancelActive()`, `Paste.shutdown()`, `Currency.shutdown()`. A modal
-grab that outlives the extension leaves the session unable to click anything,
-and `ExtensionManager` only *logs* a throw from `disable()`.
+Adding a tool means writing a `{id, title, cap, search(query, ctx)}` provider and
+appending it to `PROVIDERS`; providers are pure, synchronous and never touch
+`St`. Extension JS changes need a **full gnome-shell restart**, not
+disable/enable — X11 `Alt+F2` → `r`, Wayland log out or
+`dbus-run-session -- gnome-shell --nested --wayland`. Changes under `schemas/`
+need `glib-compile-schemas schemas/` first, or `enable()` throws. Anything
+holding a resource must be cleared at the top of **both** `enable()` and
+`disable()`, or a modal grab outlives the extension and the session stops
+responding to clicks.
 
 ### The website
 
 [dfxe.github.io/clipboard-box](https://dfxe.github.io/clipboard-box) is built
-from this file. `docs/build.mjs` lifts four regions out of `README.md` — the
-tagline, the lede, the support matrix and the quick start — and substitutes them
-into `docs/index.template.html`, so the page has no prose of its own to fall out
-of date. Editing the README *is* editing the page; a push to `main` redeploys
-it.
+from this file: `docs/build.mjs` lifts the tagline, lede, support matrix and
+quick start into `docs/index.template.html`, so the page has no prose of its own
+to fall out of date. A push to `main` redeploys it.
 
 ```sh
-npm ci --prefix docs             # once: Playwright, scoped to docs/ so the
-npx --prefix docs playwright install chromium   # extension keeps its promise
-node docs/build.mjs              # renders docs/shots/*.png, then docs/_site/
+npm ci --prefix docs
+npx --prefix docs playwright install chromium
+node docs/build.mjs      # renders docs/shots/*.png, then docs/_site/
 ```
 
-`docs/_site/` is the published output and is gitignored. `docs/shots/` is not:
-those PNGs are what the screenshots above point at, and GitHub renders this file
-from the repo rather than from a build.
-
-That split is what the CI step guards. `node docs/build.mjs --check` compares a
-hash of everything in `docs/mocks/` against `docs/shots/manifest.json` and fails
-if they disagree — **edit a mock, re-run the build, commit the PNGs**, or the
-site moves on while the README still shows the old UI. It hashes the mock
-sources rather than the PNGs on purpose: two chromium builds do not produce
-identical bytes, so a pixel comparison would fail for no reason.
-
-The renderer handles a deliberately small subset of markdown — paragraphs, bold,
-italics, code, links, fenced blocks and tables — and *throws* on anything else
-rather than emitting it raw. Adding a bullet list to one of the four extracted
-regions will stop the build, which is the intended outcome: silently mangling
-the page is the worse failure. Teach `render()` about the construct, or keep it
-out of those sections.
-
-The mockups pin Cantarell and Inter, which the Pages workflow apt-installs so a
-runner renders them the way a developer machine does. Both are already present
-on a typical GNOME desktop; `sudo apt install fonts-cantarell fonts-inter` if
-not.
+`docs/_site/` is the published output and is gitignored; `docs/shots/` is not,
+because the screenshots above point at it. CI runs `node docs/build.mjs --check`,
+which hashes `docs/mocks/` against `docs/shots/manifest.json` — **edit a mock,
+rebuild, commit the PNGs** or the README keeps showing the old UI.
 
 ## License
 
