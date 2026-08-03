@@ -100,7 +100,7 @@ function buildIndex() {
             .filter(e => e?.char && e?.name && !e.name.includes(' skin tone'))
             .map(e => ({ char: e.char, name: e.name }));
     } catch (e) {
-        log(`cboite: Shell emoji data unavailable (${e.message}); using fallback list`);
+        log(`omelette: Shell emoji data unavailable (${e.message}); using fallback list`);
         entries = FALLBACK;
     }
 
@@ -200,7 +200,7 @@ export const emojiProvider = {
     // here the user gets an entirely blank popup body.
     emptyMessage(ctx) {
         return ctx.scope === 'emoji'
-            ? 'Nothing used yet — type to search emoji and symbols'
+            ? 'Nothing used yet. Type and go looking.'
             : null;
     },
 };

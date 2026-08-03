@@ -189,7 +189,7 @@ function multilineRow(field, item, onChange) {
     return row;
 }
 
-export default class CBoitePreferences extends ExtensionPreferences {
+export default class OmelettePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage({
@@ -289,6 +289,8 @@ export default class CBoitePreferences extends ExtensionPreferences {
         shortcuts.add(shortcutRow(settings, 'pick-color', 'Pick color'));
         shortcuts.add(shortcutRow(settings, 'open-snippets', 'Open snippets'));
         shortcuts.add(shortcutRow(settings, 'open-emoji', 'Open emoji picker'));
+        shortcuts.add(shortcutRow(settings, 'open-sensors', 'Open system readings'));
+        shortcuts.add(shortcutRow(settings, 'open-pdf', 'Extract PDF pages'));
     }
 
     _addToolsPage(window, settings) {
@@ -365,6 +367,31 @@ export default class CBoitePreferences extends ExtensionPreferences {
         settings.bind('currency-enabled', apiUrl, 'sensitive',
             Gio.SettingsBindFlags.GET | Gio.SettingsBindFlags.NO_SENSITIVITY);
         money.add(apiUrl);
+
+        const system = new Adw.PreferencesGroup({
+            title: 'System',
+            description: 'Read from BlueZ and /sys/class/hwmon. Nothing leaves this machine.',
+        });
+        page.add(system);
+
+        const sensorsOn = new Adw.SwitchRow({
+            title: 'Show device batteries and fan speeds',
+            subtitle: 'Connected Bluetooth devices that report a battery, plus any fans this machine has.',
+        });
+        settings.bind('sensors-enabled', sensorsOn, 'active', Gio.SettingsBindFlags.DEFAULT);
+        system.add(sensorsOn);
+
+        const pollSeconds = new Adw.SpinRow({
+            title: 'Fan reading interval (seconds)',
+            subtitle: 'Only while the popup is open. Batteries are not polled — BlueZ signals a change.',
+            adjustment: new Gtk.Adjustment({
+                lower: 1, upper: 30, step_increment: 1, page_increment: 5,
+            }),
+        });
+        settings.bind('sensors-poll-seconds', pollSeconds, 'value', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('sensors-enabled', pollSeconds, 'sensitive',
+            Gio.SettingsBindFlags.GET | Gio.SettingsBindFlags.NO_SENSITIVITY);
+        system.add(pollSeconds);
     }
 
     _addSnippetsPage(window, settings) {
@@ -407,7 +434,7 @@ export default class CBoitePreferences extends ExtensionPreferences {
 
         const group = new Adw.PreferencesGroup({
             title: 'Quicklinks',
-            description: 'Type the keyword followed by your search — "gh cboite" — '
+            description: 'Type the keyword followed by your search — "gh omelette" — '
                 + 'and press Enter to open it.',
         });
         page.add(group);

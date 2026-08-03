@@ -91,7 +91,7 @@ final class VaultStore: ObservableObject {
 
     func captureScreenshot(mode: ScreenshotCaptureMode) {
         let outputURL = nextCapturedScreenshotURL()
-        setCaptureStatus(mode == .interactive ? "Select an area to save into cBoite." : "Capturing screenshot...")
+        setCaptureStatus(mode == .interactive ? "Select an area to save into Omelette." : "Capturing screenshot...")
 
         Task.detached(priority: .userInitiated) { [outputURL] in
             let didCapture = Self.runScreencapture(mode: mode, outputURL: outputURL)
@@ -268,7 +268,7 @@ final class VaultStore: ObservableObject {
         else { return }
 
         _ = copyToPasteboard(vaultItem)
-        setCaptureStatus("Screenshot saved in cBoite.")
+        setCaptureStatus("Screenshot saved in Omelette.")
     }
 
     private func setCaptureStatus(_ message: String?) {
@@ -306,7 +306,7 @@ final class VaultStore: ObservableObject {
                 // session. A session that saves nothing beats one that destroys
                 // recoverable history.
                 loadFailed = true
-                NSLog("cboite: vault.json unreadable and could not be archived: \(error)")
+                NSLog("omelette: vault.json unreadable and could not be archived: \(error)")
                 setCaptureStatus("History could not be read. Nothing will be saved this session.")
             }
             return
@@ -328,7 +328,7 @@ final class VaultStore: ObservableObject {
         } catch {
             // Previously both the encode and the write error were discarded, so
             // a full disk meant history silently stopped persisting.
-            NSLog("cboite: could not save vault.json: \(error)")
+            NSLog("omelette: could not save vault.json: \(error)")
             setCaptureStatus("History could not be saved to disk.")
         }
     }

@@ -10,7 +10,7 @@ struct EncryptedPayload: Codable, Equatable {
 }
 
 enum VaultCrypto {
-    private static let keychainService = "io.github.dfxe.cboite"
+    private static let keychainService = "io.github.dfxe.omelette"
     private static let privateKeyAccount = "vault-keyagreement-private-key"
     private static let fingerprintKeyAccount = "vault-fingerprint-key"
 
@@ -85,7 +85,7 @@ enum VaultCrypto {
         sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
             salt: ephemeralPublicKey + publicKeyData,
-            sharedInfo: Data("cboite-vault-v1".utf8),
+            sharedInfo: Data("omelette-vault-v1".utf8),
             outputByteCount: 32
         )
     }

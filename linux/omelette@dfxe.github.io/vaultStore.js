@@ -114,7 +114,7 @@ export const VaultStore = GObject.registerClass({
                 it && (it.kind !== 'image' ||
                     (it.imagePath && GLib.file_test(it.imagePath, GLib.FileTest.EXISTS))));
         } catch (e) {
-            logError(e, 'cboite: failed to load vault.json');
+            logError(e, 'omelette: failed to load vault.json');
             this._items = [];
             // Rescue the bytes before anything can persist over them. If even
             // the rename fails, loadFailure still blocks _persist(), so the
@@ -187,7 +187,7 @@ export const VaultStore = GObject.registerClass({
                 try {
                     this._writePrivate(imagePath, dataBytes);
                 } catch (e) {
-                    logError(e, 'cboite: failed to write image payload');
+                    logError(e, 'omelette: failed to write image payload');
                     return null;
                 }
             }
@@ -361,11 +361,11 @@ export const VaultStore = GObject.registerClass({
                     try {
                         file.replace_contents_finish(res);
                     } catch (e) {
-                        logError(e, 'cboite: failed to persist vault.json');
+                        logError(e, 'omelette: failed to persist vault.json');
                     }
                 });
         } catch (e) {
-            logError(e, 'cboite: failed to persist vault.json');
+            logError(e, 'omelette: failed to persist vault.json');
         }
     }
 });

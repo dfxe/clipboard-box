@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.cboite"
-          path="/org/gnome/shell/extensions/cboite/">
+  <schema id="org.gnome.shell.extensions.omelette"
+          path="/org/gnome/shell/extensions/omelette/">
 
     <key name="max-items" type="i">
       <default>200</default>
@@ -93,7 +93,20 @@
     <key name="currency-api-url" type="s">
       <default>'https://api.frankfurter.app/latest?from=USD'</default>
       <summary>Exchange rate endpoint</summary>
-      <description>Fetched at most twice a day, and only when a currency conversion is actually typed. Results are cached in ~/.local/share/cboite/rates.json.</description>
+      <description>Fetched at most twice a day, and only when a currency conversion is actually typed. Results are cached in ~/.local/share/omelette/rates.json.</description>
+    </key>
+
+    <key name="sensors-enabled" type="b">
+      <default>true</default>
+      <summary>Show system readings</summary>
+      <description>Battery levels for connected Bluetooth devices, and fan speeds if this machine reports any. Both are read locally — BlueZ over the system bus and /sys/class/hwmon — so unlike currency conversion this reaches nothing off the machine, which is why it is on by default.</description>
+    </key>
+
+    <key name="sensors-poll-seconds" type="i">
+      <default>2</default>
+      <range min="1" max="30"/>
+      <summary>How often to re-read fan speeds</summary>
+      <description>Seconds between fan readings, and only while the popup is open. Bluetooth batteries are not polled at all — BlueZ signals a change when there is one. Raise this if reading the fan wakes the CPU more than you would like.</description>
     </key>
 
     <key name="auto-paste" type="b">
@@ -124,7 +137,7 @@
     <key name="toggle-menu" type="as">
       <default>[]</default>
       <summary>Open the clipboard menu</summary>
-      <description>Keyboard shortcut that toggles the cboite popup.</description>
+      <description>Keyboard shortcut that toggles the omelette popup.</description>
     </key>
 
     <key name="capture-area" type="as">
@@ -155,6 +168,18 @@
       <default>[]</default>
       <summary>Open the emoji picker</summary>
       <description>Keyboard shortcut that opens the popup ready to search emoji and symbols.</description>
+    </key>
+
+    <key name="open-sensors" type="as">
+      <default>[]</default>
+      <summary>Open the system readings</summary>
+      <description>Keyboard shortcut that opens the popup showing Bluetooth battery levels and fan speeds.</description>
+    </key>
+
+    <key name="open-pdf" type="as">
+      <default>[]</default>
+      <summary>Open the PDF page extractor</summary>
+      <description>Keyboard shortcut that opens the popup ready to pick a PDF and pull out a page or a range.</description>
     </key>
 
   </schema>

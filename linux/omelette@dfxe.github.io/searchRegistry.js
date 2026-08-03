@@ -31,6 +31,7 @@
 //     { kind: 'icon',   name, size }     symbolic icon
 //     { kind: 'swatch', color }          solid colour chip
 //     { kind: 'glyph',  text }           literal character (emoji, symbols)
+//     { kind: 'ring',   percent, size }  circular gauge (battery levels)
 //
 // run() and action.run() may call ctx.requestPaste() at the moment the clipboard
 // actually holds the new content — the Indicator defers the keystroke until the
@@ -50,7 +51,7 @@ export function runSearch(providers, query, ctx) {
             results = provider.search(query, ctx) ?? [];
         } catch (e) {
             // One misbehaving provider must not take the whole popup down.
-            logError(e, `cboite: provider "${provider.id}" failed`);
+            logError(e, `omelette: provider "${provider.id}" failed`);
             results = [];
         }
 
@@ -69,7 +70,7 @@ export function runSearch(providers, query, ctx) {
             // Inside the boundary for the same reason search() is: a throw here
             // would otherwise escape into the caller's rebuild loop and leave
             // the list half-built.
-            logError(e, `cboite: provider "${provider.id}" emptyMessage failed`);
+            logError(e, `omelette: provider "${provider.id}" emptyMessage failed`);
             continue;
         }
         if (message) groups.push({ provider, results: [], emptyMessage: message });

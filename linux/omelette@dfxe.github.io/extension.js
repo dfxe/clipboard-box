@@ -20,12 +20,21 @@ import * as Capture from './capture.js';
 import * as ColorPicker from './colorPicker.js';
 import * as Paste from './paste.js';
 import * as Currency from './currency.js';
+import * as Sensors from './sensors.js';
+import * as PdfRunner from './pdfRunner.js';
+import * as FilePortal from './filePortal.js';
+import { makeRing } from './gauge.js';
+import { buildSensorsPanel } from './sensorsPanel.js';
+import { buildPdfPanel } from './pdfPanel.js';
 import { runSearch, totalResults } from './searchRegistry.js';
 import { historyProvider, screenshotProvider } from './historyProvider.js';
 import { answerProvider } from './answerProvider.js';
+import { aboutProvider } from './aboutProvider.js';
 import { quicklinkProvider } from './quicklinkProvider.js';
 import { snippetProvider } from './snippetProvider.js';
 import { emojiProvider } from './emojiProvider.js';
+import { sensorsProvider } from './sensorsProvider.js';
+import { pdfProvider } from './pdfProvider.js';
 import {
     seedQuicklinksOnce, loadSnippets, saveSnippets, loadQuicklinks, newId,
 } from './configStore.js';
@@ -33,7 +42,7 @@ import { ingestText } from './clipboardUtil.js';
 
 const KEYBINDINGS = [
     'toggle-menu', 'capture-area', 'capture-full', 'pick-color',
-    'open-snippets', 'open-emoji',
+    'open-snippets', 'open-emoji', 'open-sensors', 'open-pdf',
 ];
 
 // Search sources, in the order their sections appear in the popup. The tools
@@ -41,10 +50,13 @@ const KEYBINDINGS = [
 // answer or an exact snippet match is almost always what you meant, and history
 // is what you fall back to browsing.
 const PROVIDERS = [
+    aboutProvider,
     answerProvider,
     quicklinkProvider,
     snippetProvider,
     emojiProvider,
+    sensorsProvider,
+    pdfProvider,
     historyProvider,
     screenshotProvider,
 ];
@@ -67,14 +79,53 @@ const PAGE_STEP = 8;
 const CHROME_PADDING_PX = 24;
 const CHROME_FALLBACK_PX = 260;
 
-const SEARCH_HINT = 'Search, calculate, or type a keyword…';
+const SEARCH_HINT = 'Find it, work it out, or just type…';
+
+// What the search box says when the popup was opened by a tool's own shortcut.
+// A map rather than a conditional so adding a tool cannot silently label itself
+// as one of the others.
+const SCOPE_HINTS = {
+    snippet: 'Search snippets…',
+    emoji: 'Search emoji and symbols…',
+    sensors: 'Search devices and fans…',
+    pdf: 'Pick a PDF, then a page range…',
+};
+
+// Scopes that open into a panel instead of a list of rows. A table for the same
+// reason SCOPE_HINTS is one: a second `if` here is how a third tool ends up
+// silently drawing the second tool's dashboard.
+//
+// Not a member on the provider, tempting as that is — providers must never
+// import St (searchRegistry.js:6-8) and every builder here does. Each returns
+// { actor, holdsFocus?, focus?, onEscape?, update? }, or null to fall through
+// to ordinary rows and let the provider's emptyMessage explain why.
+const PANELS = {
+    sensors: (ctx, indicator) => {
+        const actor = buildSensorsPanel(ctx.sensors?.());
+        return actor ? { actor } : null;
+    },
+    pdf: (ctx, indicator) => indicator._buildPdfPanel(),
+};
+
+// Image thumbnails sit a degree or two off square, the way a photo dropped on a
+// desk does. The angle has to be a pure function of the image, never random:
+// _refresh rebuilds every row on every keystroke, so a fresh angle per rebuild
+// would set the whole list twitching while you type.
+const TILT_DEGREES = 1.5;
+
+function stableTilt(key) {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++)
+        hash = (Math.imul(hash, 31) + key.charCodeAt(i)) | 0;
+    return (hash & 1) ? TILT_DEGREES : -TILT_DEGREES;
+}
 
 function revealInFiles(path) {
     try {
         const dir = GLib.path_get_dirname(path);
         Gio.AppInfo.launch_default_for_uri(`file://${dir}`, null);
     } catch (e) {
-        Main.notifyError('cBoite', e.message ?? String(e));
+        Main.notifyError('Omelette', e.message ?? String(e));
     }
 }
 
@@ -123,6 +174,31 @@ function nameLabel(text, extraClass) {
     return label;
 }
 
+// Whether this Shell understands -st-accent-color, which arrived in GNOME 47
+// while metadata.json still claims 45. Asks the settings schema rather than
+// parsing a version string: the accent keyword and the accent-color key landed
+// together, and a capability check cannot drift from the Shell that is actually
+// running the way a hardcoded version list can.
+function accentColorSupported() {
+    try {
+        return new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' })
+            .settings_schema.has_key('accent-color');
+    } catch (_) {
+        return false;
+    }
+}
+
+// A provider title above its group of results. PopupSeparatorMenuItem draws the
+// text as a plain label at body size, which reads as one more row; .cb-section
+// shrinks and dims it into a heading. The class goes on the item rather than on
+// the separator's own .label, so the stylesheet reaches the text with a type
+// selector and nothing here depends on that internal staying put.
+function sectionHeader(title) {
+    const item = new PopupMenu.PopupSeparatorMenuItem(title);
+    item.add_style_class_name('cb-section');
+    return item;
+}
+
 // A compact icon button for the per-row Pin / Delete actions. St.Button consumes
 // the click, so it never also triggers the row's recopy activation.
 function iconButton(iconName, styleClass, onClick) {
@@ -138,7 +214,7 @@ function iconButton(iconName, styleClass, onClick) {
 const Indicator = GObject.registerClass(
 class Indicator extends PanelMenu.Button {
     _init() {
-        super._init(0.0, 'cBoite');
+        super._init(0.0, 'Omelette');
 
         this._vault = null;
         this._screenshots = null;
@@ -176,6 +252,23 @@ class Indicator extends PanelMenu.Button {
         this._focusWmClass = null;
         this._scope = null;
 
+        // A panel that owns a text entry also owns the keyboard, and rebuilds
+        // are held for as long as it is on screen; see _panelHold in refresh().
+        this._panel = null;
+        this._panelHold = false;
+        this._destroyed = false;
+
+        // The PDF tool's working state. In memory rather than GSettings: which
+        // document you were part-way through is not a preference, it should not
+        // outlive the session, and a file path in dconf is not 0600-protected
+        // the way vault.json is. It has to live out here rather than in the
+        // panel because the panel is destroyed and rebuilt around it — the
+        // popup closes while the file chooser is up.
+        this._pdf = {
+            path: null, name: '', pageCount: 0, encrypted: false,
+            pages: '', error: '', missing: [],
+        };
+
         this.add_child(new St.Icon({
             icon_name: 'edit-paste-symbolic',
             style_class: 'system-status-icon',
@@ -200,17 +293,25 @@ class Indicator extends PanelMenu.Button {
                 // moved, and we need its class to pick Ctrl+V vs Ctrl+Shift+V.
                 this._focusWmClass =
                     global.display.get_focus_window()?.get_wm_class() ?? null;
+                // BlueZ signals and the fan tick only run while the popup is up.
+                // Nothing polls a machine nobody is looking at.
+                Sensors.startWatching(this._settings);
                 // Rebuild unconditionally. The list is otherwise only rebuilt on
                 // a store change or a keystroke, so a popup reopened after a
                 // scoped session would still be showing that tool's rows.
                 this.refresh({ resetSelection: true });
                 this._syncScrollHeight();
                 // Focus the search box so you can filter by just typing.
-                if (this._searchEntry) this._searchEntry.grab_key_focus();
+                this._focusInput();
             } else {
                 // Drop any in-flight copy flash, so a row we closed on early
                 // isn't still lit up the next time the popup opens.
                 this._cancelFlash();
+                // Before _scope is cleared below: the panel is what holds
+                // rebuilds off, and the refresh on the next open must not find
+                // a stale one still claiming the keyboard.
+                this._releasePanel();
+                Sensors.stopWatching();
                 // Before clearing the entry, not after: set_text('') fires
                 // text-changed synchronously, which refreshes — and that
                 // refresh must not run with _scope still pointing at a tool.
@@ -233,26 +334,46 @@ class Indicator extends PanelMenu.Button {
     // Scoping rather than pre-filling a prefix character keeps the query box
     // holding only what the user actually typed.
     openForTool(scope) {
+        // Before refresh(), or the outgoing panel's hold blocks the rebuild
+        // that is meant to replace it.
+        this._releasePanel();
         this._scope = scope;
         this._filter = '';
         if (this._searchEntry) {
             this._searchEntry.set_text('');
-            this._searchEntry.hint_text = scope === 'emoji'
-                ? 'Search emoji and symbols…'
-                : 'Search snippets…';
+            this._searchEntry.hint_text = SCOPE_HINTS[scope] ?? SEARCH_HINT;
         }
         // Refresh here as well as in the open handler: when the popup is
         // already open, menu.open() is a no-op and never fires it.
         this.refresh({ resetSelection: true });
         this.menu.open(BoxPointer.PopupAnimation.FULL);
+        this._focusInput();
     }
 
     _clearScope() {
         if (!this._scope) return false;
+        this._releasePanel();
         this._scope = null;
         if (this._searchEntry) this._searchEntry.hint_text = SEARCH_HINT;
         this.refresh({ resetSelection: true });
+        // Load-bearing, not tidiness: the rebuild just destroyed the actor that
+        // held key focus, and focus then falls to the stage — where key events
+        // never reach menu.actor, so _onCapturedEvent stops firing and the
+        // popup goes deaf to every key including Escape.
+        this._focusInput();
         return true;
+    }
+
+    // A panel with its own text entry has already grabbed the keyboard from
+    // inside refresh(); taking it back here would undo that a frame later.
+    _focusInput() {
+        if (this._panelHold) return;
+        this._searchEntry?.grab_key_focus();
+    }
+
+    _releasePanel() {
+        this._panel = null;
+        this._panelHold = false;
     }
 
     _onCapturedEvent(event) {
@@ -264,6 +385,13 @@ class Indicator extends PanelMenu.Button {
             ~(Clutter.ModifierType.LOCK_MASK | Clutter.ModifierType.MOD2_MASK) &
             Clutter.ModifierType.MODIFIER_MASK;
         if (state !== 0) return Clutter.EVENT_PROPAGATE;
+
+        // A panel with its own text entry owns the keyboard. _rows is empty by
+        // construction on that path, so there is no selection for the arrows to
+        // steer and no row for Enter to activate — every key but Escape belongs
+        // to whichever field has focus.
+        if (this._panelHold && event.get_key_symbol() !== Clutter.KEY_Escape)
+            return Clutter.EVENT_PROPAGATE;
 
         switch (event.get_key_symbol()) {
         case Clutter.KEY_Down:
@@ -288,8 +416,10 @@ class Indicator extends PanelMenu.Button {
             this._activateSelected();
             return Clutter.EVENT_STOP;
         case Clutter.KEY_Escape:
-            // Escape peels one layer at a time: query, then tool scope, then
-            // the popup itself. Propagating is what lets the menu manager close.
+            // Escape peels one layer at a time: a panel's own field, then the
+            // query, then the tool scope, then the popup itself. Propagating is
+            // what lets the menu manager close.
+            if (this._panel?.onEscape?.()) return Clutter.EVENT_STOP;
             if (this._searchEntry && this._searchEntry.get_text() !== '') {
                 this._searchEntry.set_text('');
                 return Clutter.EVENT_STOP;
@@ -340,6 +470,15 @@ class Indicator extends PanelMenu.Button {
                 // answer stops saying "unavailable".
                 if (this.menu.isOpen) this.refresh();
             }, codes),
+            // A thunk for the same reason as rates: resolving it can talk to
+            // BlueZ, and this context is rebuilt on every keystroke. What comes
+            // back is whatever sensors.js already holds — never a blocking read.
+            // Null unless the user left system readings switched on.
+            sensors: () => Sensors.snapshot(this._settings, () => {
+                // A battery ticked over or a fan changed speed after the rows
+                // were drawn — redraw so the numbers stay honest.
+                if (this.menu.isOpen) this.refresh();
+            }),
             // Both lists were being re-read from GSettings — get_strv plus a
             // JSON.parse per entry — on every keystroke. They only change when
             // the prefs window writes, which we already watch for.
@@ -347,9 +486,19 @@ class Indicator extends PanelMenu.Button {
             quicklinks: this._quicklinks(),
             requestPaste: opts => this._armPaste(opts),
             saveSnippet: text => this._saveSnippet(text),
+            // Both read by the About section only, which is why they are plain
+            // values rather than anything the search path has to resolve.
+            version: this._version,
+            openPreferences: this._openPreferences,
             // Set when the popup was opened by a tool-specific shortcut; lets a
             // provider list everything it has instead of waiting for a query.
             scope: this._scope,
+            // Lets a row switch the popup into a tool's own panel, the way
+            // openPreferences lets one leave for another window entirely.
+            openTool: scope => this.openForTool(scope),
+            // A thunk, like rates and sensors: this walks PATH, and the context
+            // is rebuilt on every keystroke. Cached inside pdfRunner.
+            pdfMissing: () => PdfRunner.missingTools(),
         };
     }
 
@@ -361,10 +510,10 @@ class Indicator extends PanelMenu.Button {
         const body = text;
         const snippets = loadSnippets(this._settings);
         if (snippets.some(s => s.body === body))
-            return { message: 'Already a snippet' };
+            return { message: 'Already got that one' };
         snippets.push({ id: newId(), keyword: '', label: '', body, uses: 0 });
         saveSnippets(this._settings, snippets);
-        return { message: 'Saved as snippet' };
+        return { message: 'Saved it as a snippet' };
     }
 
     // A provider calls ctx.requestPaste() at the exact moment the clipboard
@@ -390,12 +539,16 @@ class Indicator extends PanelMenu.Button {
         });
     }
 
-    setContext({ vault, screenshots, monitor, settings, uuid }) {
+    setContext({ vault, screenshots, monitor, settings, uuid, version, openPreferences }) {
         this._vault = vault;
         this._screenshots = screenshots;
         this._monitor = monitor;
         this._settings = settings;
         this._uuid = uuid;
+        this._version = version ?? '';
+        // Opening the prefs window is an Extension method, and the Indicator has
+        // no handle on the Extension — so it arrives as a thunk.
+        this._openPreferences = openPreferences ?? null;
         this._buildMenu();
     }
 
@@ -404,6 +557,15 @@ class Indicator extends PanelMenu.Button {
     // text across rebuilds.
     _buildMenu() {
         this.menu.removeAll();
+
+        // Gates every -st-accent-color rule in the stylesheet on one ancestor
+        // class, so on a Shell that never heard of the keyword those selectors
+        // simply do not match. The alternative — a literal and the keyword as
+        // two declarations of the same property — relies on the parser
+        // discarding the one it cannot read, which would leave the element with
+        // no colour at all if it instead stored it and failed to resolve later.
+        if (accentColorSupported())
+            this.menu.box.add_style_class_name('cb-accent');
 
         this.menu.addMenuItem(this._makeCaptureRow());
         this.menu.addMenuItem(this._makeSearchRow());
@@ -474,7 +636,7 @@ class Indicator extends PanelMenu.Button {
     // gone there's no in-UI way back, so the notification has to carry it.
     _quit() {
         if (!this._uuid) return;
-        Main.notify('cBoite',
+        Main.notify('Omelette',
             `Turned off. Re-enable with: gnome-extensions enable ${this._uuid}`);
         Gio.DBus.session.call(
             'org.gnome.Shell', '/org/gnome/Shell', 'org.gnome.Shell.Extensions',
@@ -503,6 +665,19 @@ class Indicator extends PanelMenu.Button {
             return;
         }
 
+        // A panel holding a live text entry is not rebuildable. Unlike a flash
+        // there is nothing to replay afterwards — a rebuild takes the field and
+        // whatever was half-typed into it — and the refresh sources here fire
+        // on their own schedule: the fan tick alone lands every couple of
+        // seconds while the popup is open. So this rebuild is dropped, not
+        // queued. The three transitions that end a panel — leaving the scope,
+        // entering another tool, closing the popup — all call _releasePanel()
+        // first, so nothing can be held off indefinitely.
+        //
+        // The cost is that a copy landing while the panel is up doesn't update
+        // the list underneath. Neither is on screen, so nothing looks stale.
+        if (this._panelHold) return;
+
         // Remember what was selected so a rebuild triggered by a background
         // store change (a fresh copy landing) doesn't move the highlight out
         // from under the user mid-keystroke.
@@ -510,37 +685,65 @@ class Indicator extends PanelMenu.Button {
             ? null
             : this._rows[this._selected]?.result.id ?? null;
 
+        this._releasePanel();
         this._listSection.removeAll();
         this._rows = [];
 
         const ctx = this._ctx();
-        const providers = this._scope
-            ? PROVIDERS.filter(p => p.id === this._scope)
-            : PROVIDERS;
-        const groups = runSearch(providers, this._filter, ctx);
 
-        for (const group of groups) {
-            this._listSection.addMenuItem(
-                new PopupMenu.PopupSeparatorMenuItem(group.provider.title));
+        // Some shortcuts open into a panel rather than a list: seeing every
+        // battery at once, or a file to pick and a range to type, is the whole
+        // reason to ask. Typing falls through to ordinary rows, and so does a
+        // builder returning null — which leaves the provider's emptyMessage to
+        // explain why the popup is empty.
+        const panel = this._filter === ''
+            ? PANELS[this._scope]?.(ctx, this) ?? null
+            : null;
 
-            if (group.results.length === 0) {
+        if (panel) {
+            this._listSection.addMenuItem(sectionHeader(
+                PROVIDERS.find(p => p.id === this._scope)?.title ?? ''));
+            // Nothing here is activatable, so it stays out of _rows and the
+            // arrow keys skip straight past it. can_focus/reactive stay false
+            // on the item itself even when the panel inside it has a focusable
+            // entry, so PopupBaseMenuItem's hover-to-grab_key_focus path stays
+            // disarmed and the entry keeps focus on its own terms.
+            const item = new PopupMenu.PopupBaseMenuItem({
+                activate: false, hover: false, can_focus: false, reactive: false,
+            });
+            item.add_child(panel.actor);
+            this._listSection.addMenuItem(item);
+            this._panel = panel;
+            this._panelHold = panel.holdsFocus === true;
+            panel.focus?.();
+        } else {
+            const providers = this._scope
+                ? PROVIDERS.filter(p => p.id === this._scope)
+                : PROVIDERS;
+            const groups = runSearch(providers, this._filter, ctx);
+
+            for (const group of groups) {
+                this._listSection.addMenuItem(sectionHeader(group.provider.title));
+
+                if (group.results.length === 0) {
+                    this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
+                        group.emptyMessage, { reactive: false }));
+                    continue;
+                }
+
+                for (const result of group.results) {
+                    const row = this._makeResultRow(result);
+                    this._listSection.addMenuItem(row.item);
+                    this._rows.push(row);
+                }
+            }
+
+            // With a query, empty sections are hidden rather than each printing
+            // its own "No matches" — so say it once, for the whole bar.
+            if (this._filter !== '' && totalResults(groups) === 0) {
                 this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                    group.emptyMessage, { reactive: false }));
-                continue;
+                    'Nothing matches that.', { reactive: false }));
             }
-
-            for (const result of group.results) {
-                const row = this._makeResultRow(result);
-                this._listSection.addMenuItem(row.item);
-                this._rows.push(row);
-            }
-        }
-
-        // With a query, empty sections are hidden rather than each printing its
-        // own "No matches" — so say it once, for the whole bar.
-        if (this._filter !== '' && totalResults(groups) === 0) {
-            this._listSection.addMenuItem(new PopupMenu.PopupMenuItem(
-                'No results', { reactive: false }));
         }
 
         const restored = previousId === null
@@ -571,13 +774,13 @@ class Indicator extends PanelMenu.Button {
 
         const previous = this._rows[this._selected];
         if (previous && this._selected !== clamped)
-            previous.row.remove_style_class_name('cb-selected');
+            previous.item.remove_style_class_name('cb-selected');
 
         this._selected = clamped;
 
         const current = this._rows[clamped];
         if (!current) return;
-        current.row.add_style_class_name('cb-selected');
+        current.item.add_style_class_name('cb-selected');
         if (scroll && this._scrollView) ensureVisible(this._scrollView, current.item.actor);
     }
 
@@ -683,9 +886,15 @@ class Indicator extends PanelMenu.Button {
         });
         screen.connect('clicked', () => { this.menu.close(); this._capture('full'); });
 
+        // An eyedropper rather than a third labelled button. Picking a colour is
+        // a different kind of act from capturing a region, and at icon size it
+        // stops competing with the two captures for the row — which is also why
+        // it is the one button here that does not x_expand.
         const color = new St.Button({
-            label: 'Color', x_expand: true, can_focus: true,
-            style_class: 'cb-capture-btn button',
+            can_focus: true,
+            style_class: 'cb-pick-btn button',
+            child: new St.Icon({ icon_name: 'color-select-symbolic', icon_size: 16 }),
+            accessible_name: 'Pick a color from the screen',
         });
         color.connect('clicked', () => { this.menu.close(); this._pickColor(); });
 
@@ -709,7 +918,7 @@ class Indicator extends PanelMenu.Button {
         const onDone = (pathUsed, err) => {
             if (err || !pathUsed) {
                 if (err && err.message?.includes('cancel')) return; // user aborted SelectArea
-                Main.notifyError('cBoite', err?.message ?? 'Screenshot failed');
+                Main.notifyError('Omelette', err?.message ?? 'Screenshot failed');
                 return;
             }
             this._ingestCaptured(pathUsed);
@@ -732,14 +941,80 @@ class Indicator extends PanelMenu.Button {
             if (item) this._monitor?.ignore(item.fingerprint);
             St.Clipboard.get_default().set_content(
                 St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
-            Main.notify('cBoite', `Captured ${base}`);
+            Main.notify('Omelette', `Captured ${base}`);
+        });
+    }
+
+    // --- The PDF tool ----------------------------------------------------
+
+    _buildPdfPanel() {
+        this._pdf.missing = PdfRunner.missingTools();
+        return buildPdfPanel(this._pdf, {
+            onBrowse: () => this._browsePdf(),
+            onExtract: range => this._extractPdf(range),
+        });
+    }
+
+    // The popup holds a Shell modal grab, so the portal's file chooser would
+    // appear and then ignore every click and keystroke. Close first — the same
+    // trade the Area and Screen buttons make — and reopen once a file comes
+    // back.
+    _browsePdf() {
+        this.menu.close(BoxPointer.PopupAnimation.FULL);
+        FilePortal.pickPdf((path, err) => {
+            if (this._destroyed) return;
+            if (err) {
+                Main.notifyError('Omelette', err.message ?? String(err));
+                return;
+            }
+            // No path and no error is a cancelled dialog. Stay as quiet about
+            // it as _capture() is about an abandoned SelectArea.
+            if (!path) return;
+
+            this._pdf.path = path;
+            this._pdf.name = GLib.path_get_basename(path);
+            this._pdf.pageCount = 0;
+            this._pdf.encrypted = false;
+            this._pdf.error = '';
+            this.openForTool('pdf');
+
+            PdfRunner.readInfo(path, (info, infoErr) => {
+                if (this._destroyed || this._pdf.path !== path) return;
+                if (infoErr) {
+                    this._pdf.error = infoErr.message ?? String(infoErr);
+                } else {
+                    this._pdf.pageCount = info.pageCount;
+                    this._pdf.encrypted = info.encrypted;
+                }
+                // Update in place rather than refreshing: a rebuild here would
+                // destroy the range field the user may already be typing into.
+                this._panel?.update?.(this._pdf);
+            });
+        });
+    }
+
+    _extractPdf({ first, last }) {
+        const source = this._pdf.path;
+        if (!source) return;
+
+        // Extraction outlives the popup, so close now and report through a
+        // notification, the way a capture does.
+        this.menu.close(BoxPointer.PopupAnimation.FULL);
+        PdfRunner.extractRange({ source, first, last }, (dest, err) => {
+            if (this._destroyed) return;
+            if (err || !dest) {
+                Main.notifyError('Omelette', err?.message ?? 'Could not extract those pages.');
+                return;
+            }
+            const pages = first === last ? `page ${first}` : `pages ${first}–${last}`;
+            Main.notify('Omelette', `Extracted ${pages} to ${GLib.path_get_basename(dest)}`);
         });
     }
 
     _pickColor() {
         ColorPicker.pickColor((hex, err) => {
             if (err) {
-                Main.notifyError('cBoite', err.message ?? 'Color pick failed');
+                Main.notifyError('Omelette', err.message ?? 'Color pick failed');
                 return;
             }
             // No hex and no error means Escape or a right click — stay as quiet
@@ -756,7 +1031,7 @@ class Indicator extends PanelMenu.Button {
         // colour into whatever happens to have focus is not what anyone means
         // by "pick a colour".
         ingestText(hex, { ...this._ctx(), requestPaste: null }, { store: true, title: hex });
-        Main.notify('cBoite', `Copied ${hex}`);
+        Main.notify('Omelette', `Copied ${hex}`);
     }
 
     // Confirm a copy on the row the user actually clicked: highlight the row,
@@ -764,11 +1039,11 @@ class Indicator extends PanelMenu.Button {
     // the popup once the flash has been seen — row activation used to close it
     // instantly (see the activate() override below), which left no room for any
     // feedback at all.
-    _flash({ item, row, hint, thumb, message, close = false }) {
+    _flash({ item, hint, thumb, message, close = false }) {
         this._cancelFlash();
 
         const previousHint = hint.text;
-        row.add_style_class_name('cb-copied');
+        item.add_style_class_name('cb-copied');
         hint.text = `✓ ${message}`;
         hint.add_style_class_name('cb-hint-ok');
 
@@ -792,7 +1067,7 @@ class Indicator extends PanelMenu.Button {
             item,
             destroyId: 0,
             undo: () => {
-                row.remove_style_class_name('cb-copied');
+                item.remove_style_class_name('cb-copied');
                 hint.text = previousHint;
                 hint.remove_style_class_name('cb-hint-ok');
                 thumb.remove_all_transitions();
@@ -858,7 +1133,7 @@ class Indicator extends PanelMenu.Button {
         try {
             return this._buildVisual(visual);
         } catch (e) {
-            logError(e, 'cboite: could not build row visual');
+            logError(e, 'omelette: could not build row visual');
             return new St.Icon({
                 icon_name: 'text-x-generic-symbolic',
                 icon_size: visual?.size ?? 32, style_class: 'cb-thumb',
@@ -869,10 +1144,10 @@ class Indicator extends PanelMenu.Button {
     _buildVisual(visual) {
         switch (visual?.kind) {
         case 'gicon':
-            return new St.Icon({
+            return this._mountOnPaper(new St.Icon({
                 gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(visual.path) }),
-                icon_size: visual.size ?? 64, style_class: 'cb-thumb',
-            });
+                icon_size: visual.size ?? 64,
+            }), stableTilt(visual.path));
         case 'swatch':
             // The inline colour wins over .cb-swatch, which only carries the
             // size and border.
@@ -882,6 +1157,12 @@ class Indicator extends PanelMenu.Button {
             });
         case 'glyph':
             return new St.Label({ text: visual.text, style_class: 'cb-thumb cb-glyph' });
+        case 'ring':
+            return makeRing({
+                percent: visual.percent,
+                size: visual.size ?? 32,
+                styleClass: 'cb-thumb',
+            });
         case 'icon':
         default:
             return new St.Icon({
@@ -889,6 +1170,38 @@ class Indicator extends PanelMenu.Button {
                 icon_size: visual?.size ?? 32, style_class: 'cb-thumb',
             });
         }
+    }
+
+    // Tilts a thumbnail and tapes it down. Both are actor geometry rather than
+    // stylesheet, because St's CSS has neither `transform` nor `::before`.
+    //
+    // The wrapper takes .cb-thumb — so the row keeps the same footprint and
+    // right margin it had when the icon carried the class itself — and the icon
+    // inside carries nothing. Without the pivot the thumbnail swings about its
+    // top-left corner instead of turning in place.
+    _mountOnPaper(thumb, degrees) {
+        const mount = new St.Widget({
+            style_class: 'cb-thumb',
+            layout_manager: new Clutter.BinLayout(),
+        });
+        mount.set_pivot_point(0.5, 0.5);
+        mount.rotation_angle_z = degrees;
+        mount.add_child(thumb);
+
+        const tape = new St.Widget({
+            style_class: 'cb-tape',
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.START,
+        });
+        tape.set_pivot_point(0.5, 0.5);
+        tape.rotation_angle_z = -45;
+        // Straddling the corner rather than sitting inside it. Done with
+        // translation because St clamps negative CSS margins.
+        tape.translation_x = -7;
+        tape.translation_y = 4;
+        mount.add_child(tape);
+
+        return mount;
     }
 
     _makeResultRow(result) {
@@ -901,6 +1214,10 @@ class Indicator extends PanelMenu.Button {
         const item = new PopupMenu.PopupBaseMenuItem({
             activate: true, hover: false, can_focus: false,
         });
+        // Selection and the copy flash are painted on the item rather than on
+        // the box inside it, so the highlight fills the row the theme already
+        // laid out instead of drawing a second, inset rectangle within it.
+        item.add_style_class_name('cb-item');
         const row = new St.BoxLayout({ vertical: false, x_expand: true, style_class: 'cb-row' });
 
         const thumb = this._makeVisual(result.visual);
@@ -923,7 +1240,7 @@ class Indicator extends PanelMenu.Button {
         if (result.accel)
             row.add_child(new St.Label({ text: result.accel, style_class: 'cb-accel' }));
 
-        const flashFor = message => this._flash({ item, row, hint, thumb, message });
+        const flashFor = message => this._flash({ item, hint, thumb, message });
 
         if (result.actions?.length) {
             const actions = new St.BoxLayout({ style_class: 'cb-row-actions' });
@@ -937,7 +1254,7 @@ class Indicator extends PanelMenu.Button {
                     try {
                         outcome = action.run(this._ctx());
                     } catch (e) {
-                        logError(e, `cboite: row action on "${result.id}" failed`);
+                        logError(e, `omelette: row action on "${result.id}" failed`);
                         this._resumeRefresh();
                         return;
                     }
@@ -974,12 +1291,12 @@ class Indicator extends PanelMenu.Button {
             } catch (e) {
                 // Uncaught, this escapes into Clutter's click handler and
                 // leaves the popup with no flash and no close.
-                logError(e, `cboite: result "${result.id}" failed`);
+                logError(e, `omelette: result "${result.id}" failed`);
                 this._resumeRefresh();
                 return;
             }
             if (outcome?.message) {
-                this._flash({ item, row, hint, thumb, message: outcome.message, close: outcome.close });
+                this._flash({ item, hint, thumb, message: outcome.message, close: outcome.close });
                 return;   // _cancelFlash resumes when the flash ends
             }
             this._resumeRefresh();
@@ -990,8 +1307,12 @@ class Indicator extends PanelMenu.Button {
     }
 
     destroy() {
+        // Read by the PDF callbacks, which can land long after this: a file
+        // chooser is open for as long as the user leaves it open.
+        this._destroyed = true;
         this._cancelFlash();
         this._cancelSearchDebounce();
+        this._releasePanel();
         this._rows = [];
         if (this._capturedId) {
             this.menu.actor.disconnect(this._capturedId);
@@ -1005,13 +1326,16 @@ class Indicator extends PanelMenu.Button {
     }
 });
 
-export default class CBoiteExtension extends Extension {
+export default class OmeletteExtension extends Extension {
     enable() {
         // The ESM modules stay loaded across disable/enable, so clear any state
         // that survived a teardown which threw partway through.
         ColorPicker.cancelActive();
         Paste.shutdown();
         Currency.shutdown();
+        Sensors.shutdown();
+        FilePortal.cancelActive();
+        PdfRunner.reset();
 
         this._settings = this.getSettings();
         seedQuicklinksOnce(this._settings);
@@ -1028,6 +1352,8 @@ export default class CBoiteExtension extends Extension {
             monitor: this._monitor,
             settings: this._settings,
             uuid: this.uuid,
+            version: this.metadata['version-name'] ?? '',
+            openPreferences: () => this.openPreferences(),
         });
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
@@ -1052,6 +1378,15 @@ export default class CBoiteExtension extends Extension {
                 this._indicator?.invalidateConfigCache();
                 this._indicator?.refresh();
             }),
+            // Switching system readings off has to stop the watchers, not just
+            // hide the rows — otherwise the fan timer keeps ticking against a
+            // section nobody can see.
+            this._settings.connect('changed::sensors-enabled', () => {
+                Sensors.stopWatching();
+                if (this._indicator?.menu.isOpen)
+                    Sensors.startWatching(this._settings);
+                this._indicator?.refresh();
+            }),
         ];
 
         this._addKeybindings();
@@ -1074,7 +1409,7 @@ export default class CBoiteExtension extends Extension {
         if (GLib.find_program_in_path(wayland ? 'wl-paste' : 'xclip')) return;
         this._warnId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._warnId = 0;
-            Main.notify('cBoite',
+            Main.notify('Omelette',
                 `Install ${wayland ? 'wl-clipboard' : 'xclip'} so terminal apps can ` +
                 'paste clipboard images with Ctrl+V.');
             this._settings?.set_boolean('clipboard-helper-warned', true);
@@ -1091,7 +1426,7 @@ export default class CBoiteExtension extends Extension {
         if (!failure) return;
         this._vaultWarnId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._vaultWarnId = 0;
-            Main.notifyError('cBoite', failure.archivedTo
+            Main.notifyError('Omelette', failure.archivedTo
                 ? `History could not be read and was saved to ${failure.archivedTo}. Starting empty.`
                 : 'History could not be read. Nothing new will be saved until ' +
                   'vault.json is repaired or removed.');
@@ -1108,6 +1443,8 @@ export default class CBoiteExtension extends Extension {
             'pick-color': () => { this._indicator?.menu.close(); this._indicator?._pickColor(); },
             'open-snippets': () => this._indicator?.openForTool('snippet'),
             'open-emoji': () => this._indicator?.openForTool('emoji'),
+            'open-sensors': () => this._indicator?.openForTool('sensors'),
+            'open-pdf': () => this._indicator?.openForTool('pdf'),
         };
         for (const name of KEYBINDINGS) {
             Main.wm.addKeybinding(name, this._settings,
@@ -1129,6 +1466,13 @@ export default class CBoiteExtension extends Extension {
         Paste.shutdown();
         // Cancels any rate fetch still in flight.
         Currency.shutdown();
+        // Drops the BlueZ subscriptions and the fan timer, both of which would
+        // otherwise keep firing into an indicator that no longer exists.
+        Sensors.shutdown();
+        // Same reasoning: a file chooser the user has left open would otherwise
+        // deliver its Response to a callback holding a destroyed Indicator.
+        FilePortal.cancelActive();
+        PdfRunner.reset();
 
         this._removeKeybindings();
 

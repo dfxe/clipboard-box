@@ -1,6 +1,6 @@
 import GLib from 'gi://GLib';
 
-import { formatBytes, relativeAge, HEX_RE } from '../cboite@dfxe.github.io/format.js';
+import { formatBytes, relativeAge, HEX_RE } from '../omelette@dfxe.github.io/format.js';
 import { suite, it, eq, ok } from './harness.js';
 
 suite('format');

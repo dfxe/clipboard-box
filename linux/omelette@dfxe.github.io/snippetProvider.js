@@ -134,7 +134,7 @@ export const snippetProvider = {
     // Scoped popup only — see the note on emojiProvider.emptyMessage.
     emptyMessage(ctx) {
         return ctx.scope === 'snippet'
-            ? 'No snippets yet — add one in Preferences, or save a history entry as a snippet'
+            ? 'No snippets yet. Write one in Preferences, or save any row here as one.'
             : null;
     },
 };

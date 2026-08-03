@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>cBoite</string>
+    <string>Omelette</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.dfxe.cboite</string>
+    <string>io.github.dfxe.omelette</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>cBoite</string>
+    <string>Omelette</string>
     <key>CFBundleDisplayName</key>
-    <string>cboite</string>
+    <string>omelette</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

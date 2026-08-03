@@ -1,22 +1,20 @@
-# 📋 cBoite
+# 📋 Omelette
 
-**Everything you copy, within reach.** A top-bar vault for your clipboard
-history and recent screenshots — on macOS *and* GNOME.
+**Everything you copy, within reach.** A clipboard and screenshot history in
+your top bar, for macOS and GNOME.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)
 ![GNOME 45-49](https://img.shields.io/badge/GNOME-45--49-4A86CF)
 ![license MIT](https://img.shields.io/badge/license-MIT-green)
 [![website](https://img.shields.io/badge/website-dfxe.github.io%2Fcboite-f0f0ea)](https://dfxe.github.io/cboite)
 
-Your system clipboard remembers exactly one thing. cBoite keeps the last
-few hundred, puts your recent screenshots next to them, and hands any of it back
-with a click. On GNOME it also does the handful of things people actually open
-Raycast for — snippets, a calculator, quicklinks, an emoji picker — from the
-same search box.
+Your clipboard remembers one thing. Omelette remembers the last few hundred,
+keeps your recent screenshots beside them, and gives any of it back with a
+click. On GNOME the same search box also does snippets, a calculator,
+quicklinks and emoji.
 
-No accounts and no sync. Nothing leaves your disk unless you switch on currency
-conversion, which is off by default and is the only feature that touches the
-network.
+Everything stays on your machine. No accounts, no sync. The only feature that
+touches the network is currency conversion, and it is off by default.
 
 ```
 macos/    Swift + SwiftUI MenuBarExtra app   (macOS 13+, no Xcode project)
@@ -29,7 +27,7 @@ linux/    GNOME Shell extension, GJS / ESM   (GNOME 45–49, no build step)
 | ----------------------- | ------------------------------- |
 | ![The GNOME command bar with "100 km in mi" typed in, showing an Answer row reading 62.1371192237 mi above a matching history entry](docs/shots/gnome-command-bar.png) | ![The GNOME popup at rest, listing a pinned colour swatch, a git command, a screenshot thumbnail and a URL, with a Screenshots section beneath](docs/shots/gnome-history.png) |
 
-![The macOS menu-bar popover titled Clipboard Vault, listing seven copied items above a footer with Pause, Area, Screen and Quit](docs/shots/macos-popover.png)
+![The macOS menu-bar popover titled Everything you copied, listing seven copied items above a footer with Pause, Area, Screen and Quit](docs/shots/macos-popover.png)
 
 > **Rendered mockups with sample data, not live captures.** Layout, strings and
 > number formatting come from the source; the contents are invented. Built from
@@ -53,6 +51,8 @@ implementation today.
 | Quicklinks + web search                |   —   |   ✅   |
 | Emoji & symbol picker                  |   —   |   ✅   |
 | Currency conversion (opt-in, network)  |   —   |   ✅   |
+| Bluetooth battery gauges · fan speeds  |   —   |   ✅   |
+| PDF page extraction (needs poppler)    |   —   |   ✅   |
 | Auto-expiry, size caps, settings UI    |   —   |   ✅   |
 | Configurable shortcuts                 |   —   |   ✅   |
 | Password-manager filtering             |   ✅   |   ✅   |
@@ -60,7 +60,9 @@ implementation today.
 | Clipboard auto-clear                   |   ✅   |   —   |
 | Encrypted at rest                      |   —   |   —   |
 
-## ⚡ Quick start
+## 📦 How to install
+
+Both platforms build from this repo; there are no releases to download.
 
 **macOS** — needs the Xcode command-line tools (`xcode-select --install`). No
 third-party dependencies.
@@ -68,19 +70,25 @@ third-party dependencies.
 ```sh
 cd macos
 ./build.sh
-open build/cBoite.app
+open build/Omelette.app
 ```
 
-**GNOME** — no build step, but the bundled GSettings schema must be compiled once
-(and again whenever it changes).
+A vault icon appears in the menu bar. For `⌘V` to paste from the vault, grant
+**Accessibility** under System Settings → Privacy & Security.
+
+**GNOME** — no build step, but `glib-compile-schemas` (from `libglib2.0-bin`) must
+compile the bundled GSettings schema once, and again whenever it changes.
 
 ```sh
-glib-compile-schemas "linux/cboite@dfxe.github.io/schemas/"
+glib-compile-schemas "linux/omelette@dfxe.github.io/schemas/"
 mkdir -p ~/.local/share/gnome-shell/extensions
-ln -s "$PWD/linux/cboite@dfxe.github.io" ~/.local/share/gnome-shell/extensions/
+ln -s "$PWD/linux/omelette@dfxe.github.io" ~/.local/share/gnome-shell/extensions/
 # X11: Alt+F2 → r → Enter.   Wayland: log out and back in.
-gnome-extensions enable cboite@dfxe.github.io
+gnome-extensions enable omelette@dfxe.github.io
 ```
+
+A clipboard icon appears in the top panel. If it doesn't,
+`gnome-extensions info omelette@dfxe.github.io` reports the state and the error.
 
 ## 🍎 macOS
 
@@ -96,7 +104,7 @@ and it lands in the popover; click a row to select it for the next paste.
 None of these are configurable.
 
 > ⚠️ **The native screenshot shortcuts are swallowed, not shared.** While
-> cBoite runs, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS, including the `⇧⌘5`
+> Omelette runs, `⇧⌘3`/`⇧⌘4`/`⇧⌘5` never reach macOS, including the `⇧⌘5`
 > toolbar. Quit to get them back.
 
 `⌘V` is intercepted globally: the app swallows the keystroke, puts the selected
@@ -107,19 +115,19 @@ go into the app's own storage, and it never scans `$HOME`.
 
 ### Current limits
 
-The popover has a Pause toggle, Area, Screen and Quit, and nothing else.
+The popover has a Pause toggle, Area, Screen, About and Quit, and nothing else.
 
 - No per-item delete, no clear-history, no pin, no search.
 - History capped at 200 entries, oldest dropped. Not configurable.
 - Images are base64-inline in `vault.json` with no size cap, so a history of
   Retina screenshots gets very large.
 - To wipe: quit, then
-  `rm ~/Library/Application\ Support/cboite/vault.json`.
+  `rm ~/Library/Application\ Support/omelette/vault.json`.
 
 ## 🐧 GNOME
 
 A clipboard icon appears in the top panel. Copy text or an image and it shows up
-under **Clipboard history**; `PrtScn` shots show under **Screenshots**.
+under **Things you copied**; `PrtScn` shots show under **Screenshots**.
 
 ### The command bar
 
@@ -134,8 +142,8 @@ under its own heading, focused the moment the popup opens.
 | `Esc` | Clears the query, then leaves a tool, then closes the popup |
 
 Sections are ordered **Answer**, **Quicklinks**, **Snippets**, **Emoji &
-symbols**, **Clipboard history**, **Screenshots** — each capped, and hidden when
-nothing matches. Ranking is shared by every source: exact beats prefix beats word
+symbols**, **System**, **PDF**, **Things you copied**, **Screenshots** — each capped, and
+hidden when nothing matches. Ranking is shared by every source: exact beats prefix beats word
 boundary beats substring beats loose subsequence (`bgcol` finds
 `background-color`), and shorter matches win ties.
 
@@ -151,7 +159,7 @@ Activating a row copies it **and** sends `Ctrl+V` to the window that had focus
 - **Snippets** — searched by keyword, label or body, with `{date}`, `{time}`,
   `{clipboard}`, `{uuid}` and `{cursor}` placeholders (`{date:%d %b %Y}` takes
   any `strftime` format). Every text row has a **Save as snippet** button.
-- **Quicklinks** — `gh cboite` opens a GitHub search; typing `github`
+- **Quicklinks** — `gh omelette` opens a GitHub search; typing `github`
   finds it by name. Nine are set up on first run and stay deleted if you delete
   them; a **Search the web for…** row catches the rest.
 - **Emoji & symbols** — recently-used first, plus arrows, maths, Greek, currency
@@ -159,6 +167,19 @@ Activating a row copies it **and** sends `Ctrl+V` to the window that had focus
   already ships.
 - **Currency** — `100 usd in eur`, **off by default**. See
   [Currency and the network](#currency-and-the-network).
+- **System** — `bt` shows every connected Bluetooth device that reports a
+  battery, each as a circular gauge; `fan` shows fan speeds in RPM if this
+  machine has sensors. Devices also answer to their own name, so `master` finds
+  the mouse. Its shortcut opens straight into a dashboard of all the gauges at
+  once. Both readings are local — BlueZ over the system bus and
+  `/sys/class/hwmon` — and neither needs root.
+- **PDF** — type `pdf` to open a panel with a **Choose a PDF…** button, a page
+  box and **Extract**. `7` pulls one page, `3-7` pulls five; the result is a
+  single PDF in a new folder next to the original, so `~/Documents/report.pdf`
+  gives `~/Documents/report-extracted/report-p3-7.pdf`. Nothing is ever
+  overwritten — a second run of the same range writes `… (2).pdf`. Needs
+  **poppler-utils**; without it the section says so instead of offering a
+  button that cannot work.
 
 ### The rest
 
@@ -170,6 +191,9 @@ Activating a row copies it **and** sends `Ctrl+V` to the window that had focus
 - **Capture** — **Area** and **Screen** via GNOME's own screenshot service.
 - **Color** — an eyedropper with a live `#RRGGBB` readout. Hex entries show in
   the list as a colour swatch.
+- **About** — type `about` (or `version`) for the version, licence and a link to
+  the project; `prefs` opens the preferences window without a terminal. Both only
+  answer to their own names, so they never turn up in an ordinary search.
 - **Quit** — turns the extension off from the popup; it stays off across a reboot.
 
 Clicking an image row puts real PNG bytes on the clipboard, which GUI apps paste
@@ -177,17 +201,38 @@ directly. Terminals shell out to a helper, so `Ctrl+V` there needs `xclip` (X11)
 or `wl-clipboard` (Wayland). Every image row also has a **link** button that
 copies the *path* instead — no helper needed, and it works over SSH.
 
-### Upgrading from clipboard-box
+The PDF tool is the one other feature with an external prerequisite:
+`poppler-utils`, for `pdfinfo`, `pdfseparate` and `pdfunite`
+(`sudo apt install poppler-utils`). It is the only thing here that runs a
+subprocess, and it does so with argv arrays rather than a shell, so a path with
+spaces or quotes in it needs no escaping.
 
-The project was called `clipboard-box` until it wasn't, and the rename moved both
-the extension UUID and the data directory. History, images and cached rates
-migrate themselves the first time the new build runs. Snippets and quicklinks
-live in dconf under the old schema path, so they need one line — run it **before**
-removing the old extension:
+### Upgrading from clipboard-box or cBoite
+
+The project was called `clipboard-box`, then `cBoite`, before it was Omelette.
+Each rename moved the extension UUID, the GSettings schema and the data
+directory.
+
+History, images and cached rates migrate themselves the first time the new build
+runs — `dataDir.js` walks the chain newest-first and renames whichever old
+directory it finds into place, so either starting point works and you can skip a
+name entirely.
+
+Settings are the exception. Snippets and quicklinks live in dconf under the old
+schema path, and reading them in code would mean shipping the old schema purely
+so `Gio.Settings` could construct. One line instead — run it **before** removing
+the old extension, and use whichever name you are coming from:
 
 ```sh
+# from cBoite
+dconf dump /org/gnome/shell/extensions/cboite/ \
+  | dconf load /org/gnome/shell/extensions/omelette/
+gnome-extensions disable cboite@dfxe.github.io
+rm ~/.local/share/gnome-shell/extensions/cboite@dfxe.github.io
+
+# from clipboard-box, if you never ran a cBoite build
 dconf dump /org/gnome/shell/extensions/clipboard-box/ \
-  | dconf load /org/gnome/shell/extensions/cboite/
+  | dconf load /org/gnome/shell/extensions/omelette/
 gnome-extensions disable clipboard-box@dfxe.github.io
 rm ~/.local/share/gnome-shell/extensions/clipboard-box@dfxe.github.io
 ```
@@ -195,8 +240,10 @@ rm ~/.local/share/gnome-shell/extensions/clipboard-box@dfxe.github.io
 ### Preferences
 
 ```sh
-gnome-extensions prefs cboite@dfxe.github.io
+gnome-extensions prefs omelette@dfxe.github.io
 ```
+
+Or type `prefs` in the command bar, which opens the same window.
 
 Four pages: **General**, **Tools**, **Snippets** and **Quicklinks**. Edits reach
 the popup immediately, without a shell restart.
@@ -216,11 +263,14 @@ the popup immediately, without a shell restart.
 | Fallback search URL         | DuckDuckGo               | Used by the "Search the web for…" result            |
 | Convert currencies          | **off**                  | The only setting that enables a network request     |
 | Exchange rate endpoint      | frankfurter.app          | ECB daily rates, no API key                         |
+| Show device batteries and fan speeds | on              | Read locally; nothing leaves the machine            |
+| Fan reading interval        | 2 s                      | Only while the popup is open; batteries aren't polled |
 
 Shortcuts are all unbound by default and take a raw accelerator string such as
 `<Super><Shift>V`: **Open clipboard menu**, **Capture area**, **Capture
-screen**, **Pick color**, **Open snippets**, **Open emoji picker**. The last two
-open the popup scoped to that one tool.
+screen**, **Pick color**, **Open snippets**, **Open emoji picker**, **Open
+system readings**, **Extract PDF pages**. The last four open the popup scoped to
+that one tool.
 
 ### Currency and the network
 
@@ -228,7 +278,7 @@ The only feature that makes a network request, and **off by default** — with i
 off nothing is ever fetched. With it on, rates come from `api.frankfurter.app`
 (ECB daily reference rates, no API key, configurable endpoint), fetched only when
 you type a conversion and at most once every 12 hours, then cached to
-`~/.local/share/cboite/rates.json` so offline you get the cached rates
+`~/.local/share/omelette/rates.json` so offline you get the cached rates
 with their age shown. Only the currency codes are implied by the request.
 
 ## 🔒 Storage & privacy
@@ -237,11 +287,11 @@ Everything is local. The opt-in exchange-rate fetch is the only outbound request
 
 |                     | macOS                                                       | GNOME                                        |
 | ------------------- | ----------------------------------------------------------- | -------------------------------------------- |
-| History             | `~/Library/Application Support/cboite/vault.json`     | `~/.local/share/cboite/vault.json`     |
-| Images              | inline, base64 in `vault.json`                               | `~/.local/share/cboite/images/*.png`   |
-| Screenshots         | `~/Library/Application Support/cboite/synced-screenshots/` | `~/Pictures/Screenshots/`               |
+| History             | `~/Library/Application Support/omelette/vault.json`     | `~/.local/share/omelette/vault.json`     |
+| Images              | inline, base64 in `vault.json`                               | `~/.local/share/omelette/images/*.png`   |
+| Screenshots         | `~/Library/Application Support/omelette/synced-screenshots/` | `~/Pictures/Screenshots/`               |
 | Snippets, quicklinks | —                                                          | GSettings (`dconf`), as JSON strings          |
-| Cached rates        | —                                                            | `~/.local/share/cboite/rates.json`     |
+| Cached rates        | —                                                            | `~/.local/share/omelette/rates.json`     |
 | File perms          | `0600`                                                       | `0600` / `0700`                               |
 
 Snippets live in GSettings so an edit in the preferences window — a separate
@@ -270,9 +320,10 @@ linux/tests/parse-check.sh  # syntax-check every module
 
 No dependencies and no build step: the tested modules import nothing from
 `resource:///`, so they load in plain `gjs` with no Shell and no display. That
-covers `match`, `calc`, `units`, `format`, `configStore`, `searchRegistry` and
-`vaultStore`; everything else imports `St`/`Clutter` and needs a real shell, so
-`parse-check.sh` at least syntax-checks those.
+covers `match`, `calc`, `units`, `format`, `configStore`, `searchRegistry`,
+`sensors`, `vaultStore`, `pdfExtract` and `pdfProvider`; everything else imports
+`St`/`Clutter` and needs a real shell, so `parse-check.sh` at least
+syntax-checks those.
 
 Four invariants that are easy to break by accident:
 
@@ -301,7 +352,7 @@ responding to clicks.
 
 [dfxe.github.io/cboite](https://dfxe.github.io/cboite) is built
 from this file: `docs/build.mjs` lifts the tagline, lede, support matrix and
-quick start into `docs/index.template.html`, so the page has no prose of its own
+install steps into `docs/index.template.html`, so the page has no prose of its own
 to fall out of date. A push to `main` redeploys it.
 
 ```sh

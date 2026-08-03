@@ -1,6 +1,6 @@
 // Exchange rates for the calculator's currency conversions.
 //
-// This is the only part of cboite that touches the network, and it is
+// This is the only part of omelette that touches the network, and it is
 // OFF by default. Nothing here runs unless the user turns on `currency-enabled`
 // AND actually types a currency query — there is no background timer and no
 // fetch at enable().
@@ -46,7 +46,7 @@ function readCache() {
         if (!parsed?.rates || !parsed?.base) return null;
         return parsed;
     } catch (e) {
-        log(`cboite: unreadable rate cache (${e.message})`);
+        log(`omelette: unreadable rate cache (${e.message})`);
         return null;
     }
 }
@@ -57,7 +57,7 @@ function writeCache(table) {
         GLib.file_set_contents(cachePath(),
             new TextEncoder().encode(JSON.stringify(table, null, 2)));
     } catch (e) {
-        log(`cboite: could not cache rates (${e.message})`);
+        log(`omelette: could not cache rates (${e.message})`);
     }
 }
 
@@ -154,7 +154,7 @@ export function ratesFor(settings, onRefresh, codes = null) {
                 // Silent in the UI: a flaky network must not throw a
                 // notification on every keystroke. The stale table is still
                 // returned above, labelled with its age.
-                log(`cboite: rate refresh failed (${error.message})`);
+                log(`omelette: rate refresh failed (${error.message})`);
                 return;
             }
             onRefresh?.();

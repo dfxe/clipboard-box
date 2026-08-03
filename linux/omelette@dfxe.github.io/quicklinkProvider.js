@@ -1,27 +1,16 @@
 // Quicklinks: keyword-prefixed searches that open in the browser.
 //
-//   "gh cboite"  ->  github.com/search?q=cboite
+//   "gh omelette"  ->  github.com/search?q=omelette
 //   "github"            ->  matches the quicklink by name
 //
 // Unlike every other provider this one doesn't touch the clipboard — opening a
 // link isn't a copy, so nothing is stored and nothing is pasted.
 
-import Gio from 'gi://Gio';
-
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-
 import { loadQuicklinks, bumpQuicklink, buildUrl } from './configStore.js';
 import { scoreAnyPre, normalize, byScore, NO_MATCH } from './match.js';
+import { openUri } from './uri.js';
 
 const DEFAULT_SEARCH_URL = 'https://duckduckgo.com/?q={query}';
-
-function open(url) {
-    try {
-        Gio.AppInfo.launch_default_for_uri(url, null);
-    } catch (e) {
-        Main.notifyError('cBoite', e.message ?? String(e));
-    }
-}
 
 function linkResult(link, args, matchScore, index) {
     const url = buildUrl(link.url, args);
@@ -36,7 +25,7 @@ function linkResult(link, args, matchScore, index) {
         visual: { kind: 'icon', name: 'web-browser-symbolic', size: 32 },
         accel: 'Open',
         run: ctx => {
-            open(url);
+            openUri(url);
             bumpQuicklink(ctx.settings, link.id);
             // No flash — the popup closes and a browser window comes up, which
             // is feedback enough.
@@ -91,7 +80,7 @@ export const quicklinkProvider = {
                 subtitle: url,
                 visual: { kind: 'icon', name: 'system-search-symbolic', size: 32 },
                 accel: 'Open',
-                run: () => { open(url); return { close: true }; },
+                run: () => { openUri(url); return { close: true }; },
             });
         }
 

@@ -56,7 +56,7 @@ function device() {
         // C signature is clutter_seat_create_virtual_device(ClutterInputDeviceType).
         _device = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     } catch (e) {
-        logError(e, 'cboite: no virtual keyboard, auto-paste unavailable');
+        logError(e, 'omelette: no virtual keyboard, auto-paste unavailable');
         _device = null;
     }
     return _device;

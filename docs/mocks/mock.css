@@ -3,15 +3,21 @@
    UI, it reproduces it.
  *
  * Where a number below looks arbitrary it was read off the real thing —
- * linux/cboite@dfxe.github.io/stylesheet.css for the GNOME rows and
- * macos/cBoite/PopoverView.swift for the popover — so a change to either
+ * linux/omelette@dfxe.github.io/stylesheet.css for the GNOME rows and
+ * macos/Omelette/PopoverView.swift for the popover — so a change to either
  * has one obvious place to land here. The values that came across:
  *
- *   .cb-row        6px radius            .cb-thumb   4px radius, 12px margin
- *   .cb-hint       opacity 0.6           .cb-accel   opacity 0.45
- *   .cb-selected   rgba(128,128,128,.22) .cb-swatch  32px, grey 0.55 border
+ *   .cb-item       9px 12px padding      .cb-thumb   4px radius, 12px margin
+ *   .cb-hint       opacity 0.7           .cb-accel   opacity 0.55
+ *   .cb-selected   rgba(128,128,128,.3)  .cb-swatch  32px, grey 0.55 border
  *   .cb-answer     monospace, 1.25em     .cb-scroll  min-width 420px
+ *   .cb-tape       rgba(128,128,128,.45) .cb-section 0.8em bold, opacity 0.55
  *   popover        frame(width: 620), padding 14, rows 8 apart
+ *
+ * The extension builds its text hierarchy from three opacity steps — 1 primary,
+ * 0.7 secondary, 0.55 tertiary — rather than ad-hoc values, because dimming
+ * costs far more contrast on a light theme than a dark one. The .hint / .accel
+ * / .section values below are those steps, not independent choices.
  *
  * Fonts: Cantarell is GNOME's UI font and Inter stands in for SF Pro, which
  * exists on neither this machine nor a CI runner. Both are pinned rather than
@@ -308,13 +314,16 @@ body {
 }
 
 /* PopupSeparatorMenuItem(title): the provider name, then a rule taking the
-   rest of the width. */
+   rest of the width. .cb-section is what shrinks and dims the label — without
+   it the separator draws its title at body size and full strength, which reads
+   as one more row. 11.8px is the 0.8em step, the same one .hint and .accel
+   sit at. */
 .section {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 10px 12px 6px;
-    font-size: 12.5px;
+    font-size: 11.8px;
     font-weight: 700;
     letter-spacing: 0.02em;
     opacity: 0.55;
@@ -328,16 +337,20 @@ body {
     opacity: 0.45;
 }
 
-/* A result row: thumb, two-line label, optional accel, optional actions. */
+/* A result row: thumb, two-line label, optional accel, optional actions.
+   One element here stands for two in the extension — the PopupBaseMenuItem and
+   the .cb-row box inside it. Padding and the selection belong to the item, which
+   is where .cb-selected is applied and where the theme's own 9px 12px comes
+   from; .cb-row itself paints nothing. */
 .row {
     display: flex;
     align-items: center;
-    padding: 6px 8px;
-    border-radius: 6px;
+    padding: 9px 12px;
+    border-radius: 8px;
 }
 
 .row.is-selected {
-    background: rgba(128, 128, 128, 0.22);
+    background: rgba(128, 128, 128, 0.3);
 }
 
 .thumb {
@@ -347,7 +360,7 @@ body {
     flex: none;
     align-items: center;
     justify-content: center;
-    margin-right: 12px;
+    margin: 2px 12px 2px 0;
     border-radius: 4px;
     opacity: 0.9;
 }
@@ -367,10 +380,38 @@ body {
    32px thumb footprint). Faked with a gradient — a real thumbnail would mean
    shipping a sample image just to have something to photograph. */
 .thumb.shot {
+    position: relative;
     background:
         linear-gradient(150deg, #6c8ebf 0%, #3d5a80 48%, #22303f 100%);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
     opacity: 1;
+    /* Indicator._mountOnPaper. In the extension this is Clutter geometry, since
+       St's CSS has neither transform nor ::before; here it can be plain CSS.
+       The extension picks the sign from a hash of the image path, so the two
+       directions have to be spelled out by hand — .tilt-b is the other one. */
+    transform: rotate(1.5deg);
+}
+
+.thumb.shot.tilt-b {
+    transform: rotate(-1.5deg);
+}
+
+/* .cb-tape: a strip across the top-left corner, neutral grey at low alpha so it
+   reads on a light theme as well as a dark one. It was warm off-white until the
+   restyle, which only ever showed up against a dark popup.
+   Sized against this 32px tile rather than copying the extension's 30×9, which
+   is measured against its 64px gicon — the same strip at 32px stops reading as
+   tape and starts reading as a chamfered corner. */
+.thumb.shot::before {
+    position: absolute;
+    top: 2px;
+    left: -4px;
+    width: 16px;
+    height: 5px;
+    border-radius: 1px;
+    background: rgba(128, 128, 128, 0.45);
+    content: "";
+    transform: rotate(-45deg);
 }
 
 .meta {
@@ -396,7 +437,7 @@ body {
     margin-top: 2px;
     overflow: hidden;
     font-size: 11.8px;
-    opacity: 0.6;
+    opacity: 0.7;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -404,7 +445,7 @@ body {
 .accel {
     margin-left: 8px;
     font-size: 11.8px;
-    opacity: 0.45;
+    opacity: 0.55;
 }
 
 .row-actions {
@@ -569,7 +610,27 @@ body {
 }
 
 .mac-preview.shot {
+    position: relative;
     background: linear-gradient(150deg, #8fb0d9 0%, #4b6f9c 52%, #2b3f5c 100%);
+    /* PopoverView's `tilt` and `tape`, images only. Swift derives the sign from
+       the item's UUID; .tilt-b is the other direction. */
+    transform: rotate(1.5deg);
+}
+
+.mac-preview.shot.tilt-b {
+    transform: rotate(-1.5deg);
+}
+
+.mac-preview.shot::before {
+    position: absolute;
+    top: 5px;
+    left: -8px;
+    width: 34px;
+    height: 10px;
+    border-radius: 1px;
+    background: rgba(245, 237, 217, 0.5);
+    content: "";
+    transform: rotate(-45deg);
 }
 
 /* No .swatch counterpart on purpose: rendering a hex entry as its own colour is

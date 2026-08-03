@@ -4,11 +4,12 @@ import SwiftUI
 
 struct PopoverView: View {
     @EnvironmentObject var store: VaultStore
+    @State private var showAbout = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Clipboard Vault")
+                Text("Everything you copied")
                     .font(.headline)
                 Spacer()
                 Text("\(store.items.count)")
@@ -44,7 +45,7 @@ struct PopoverView: View {
             Divider()
 
             HStack {
-                Label("Local plaintext history", systemImage: "tray.full")
+                Label("Kept on this Mac, in plain text", systemImage: "tray.full")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -53,21 +54,25 @@ struct PopoverView: View {
                 Toggle("Pause", isOn: $store.isPaused)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
-                    .help("Stop recording the clipboard without quitting")
+                    .help("Stop noting things down, without quitting")
 
                 Button {
                     store.captureScreenshot(mode: .interactive)
                 } label: {
                     Label("Area", systemImage: "camera.viewfinder")
                 }
-                .help("Capture an area into cBoite (Control-Option-S)")
+                .help("Capture an area into Omelette (Control-Option-S)")
 
                 Button {
                     store.captureScreenshot(mode: .fullScreen)
                 } label: {
                     Label("Screen", systemImage: "display")
                 }
-                .help("Capture the screen into cBoite")
+                .help("Capture the screen into Omelette")
+
+                Button("About") { showAbout.toggle() }
+                    .buttonStyle(.borderless)
+                    .popover(isPresented: $showAbout) { AboutView() }
 
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .buttonStyle(.borderless)
@@ -78,6 +83,40 @@ struct PopoverView: View {
         .padding(14)
         .frame(width: 620)
         .frame(minHeight: 760, idealHeight: 760, maxHeight: 760)
+    }
+}
+
+// What this is and what version it is. The version comes out of the bundle
+// rather than a constant so it can only ever say what was actually built — note
+// that resolves inside the .app only, which is what build.sh assembles.
+private struct AboutView: View {
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "lock.rectangle.stack")
+                .font(.system(size: 30))
+                .foregroundStyle(.tint)
+
+            Text("Omelette \(version)")
+                .font(.headline)
+
+            Text("Everything you copy, within reach.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("MIT licensed")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Link("github.com/dfxe/cboite", destination: URL(string: "https://github.com/dfxe/cboite")!)
+                .font(.caption)
+        }
+        .multilineTextAlignment(.center)
+        .padding(20)
+        .frame(width: 260)
     }
 }
 
@@ -93,7 +132,7 @@ private struct EmptyVaultState: View {
                     .font(.system(size: 34, weight: .regular))
                     .foregroundStyle(.secondary)
 
-                Text("Copy text, images, files, or take a screenshot.")
+                Text("Nothing pinned up yet. Copy anything — text, an image, a file — and it lands here.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -173,7 +212,7 @@ private struct VaultItemRow: View {
             )
         }
         .buttonStyle(.plain)
-        .help("Use this item for the next Cmd-V")
+        .help("Peel this off for the next ⌘V")
         .task(id: item.id) {
             guard item.kind == .image,
                   let data = store.decryptedData(for: item)
@@ -215,6 +254,35 @@ private struct VaultItemRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 1)
         )
+        .overlay(alignment: .topLeading) { tape }
+        .rotationEffect(.degrees(tilt))
+        // Rotating does not grow the frame, so the tilted corners and the tape
+        // need somewhere to go or they clip against the row above.
+        .padding(.vertical, 3)
+    }
+
+    /// A photo dropped on a desk rather than filed square — images only, since a
+    /// tilted placeholder rectangle reads as a rendering fault, not as charm.
+    ///
+    /// Derived from the first byte of the item's UUID so it is fixed for the
+    /// life of the entry. `TimelineView` re-renders this row every 30s to age
+    /// the timestamp; anything random here would make the pile twitch.
+    private var tilt: Double {
+        guard item.kind == .image else { return 0 }
+        return item.id.uuid.0.isMultiple(of: 2) ? 1.5 : -1.5
+    }
+
+    /// Warm off-white at low alpha rather than a solid, so the one paper
+    /// flourish still reads in both light and dark appearance.
+    @ViewBuilder
+    private var tape: some View {
+        if item.kind == .image {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(Color(red: 0.96, green: 0.93, blue: 0.85).opacity(0.5))
+                .frame(width: 34, height: 10)
+                .rotationEffect(.degrees(-45))
+                .offset(x: -8, y: 5)
+        }
     }
 
     private var iconName: String {

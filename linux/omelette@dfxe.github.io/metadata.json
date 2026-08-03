@@ -1,8 +1,9 @@
 {
-  "uuid": "cboite@dfxe.github.io",
-  "name": "cBoite",
+  "uuid": "omelette@dfxe.github.io",
+  "name": "Omelette",
   "description": "Everything you copy, within reach. A clipboard and screenshot vault in the top bar, with a ranked command bar for snippets, a calculator, unit conversion, quicklinks and emoji. Click any entry to copy it back, and nothing leaves your machine.",
+  "version-name": "0.1.0",
   "shell-version": ["45", "46", "47", "48", "49"],
-  "settings-schema": "org.gnome.shell.extensions.cboite",
+  "settings-schema": "org.gnome.shell.extensions.omelette",
   "url": "https://github.com/dfxe/cboite"
 }

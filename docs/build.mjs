@@ -122,7 +122,7 @@ function extract(markdown) {
         tagline: render(intro[0]),
         lede: render(intro.slice(1, 3).join('\n\n')),
         glance: render(section(sections, 'at a glance')),
-        quickstart: render(section(sections, 'quick start')),
+        install: render(section(sections, 'how to install')),
     };
 }
 

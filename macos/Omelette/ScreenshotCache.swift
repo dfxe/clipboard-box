@@ -1,6 +1,6 @@
 import Foundation
 
-// On-disk cache inside cBoite's Application Support directory.
+// On-disk cache inside Omelette's Application Support directory.
 @MainActor
 final class ScreenshotCache {
     private let dir: URL

@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   The macOS menu-bar popover. Structure and every string come from
-  macos/cBoite/PopoverView.swift: the "Clipboard Vault" header with the
+  macos/Omelette/PopoverView.swift: the "Everything you copied" header with the
   item count beside it, rows of a 96×68 preview tile plus a two-line label, and
-  the footer's "Local plaintext history" / Pause / Area / Screen / Quit.
+  the footer's "Kept on this Mac, in plain text" / Pause / Area / Screen / Quit.
 
   Rows deliberately show none of GNOME's per-row buttons. The macOS build has no
   pin, no delete and no search — the README says so under "Current limits", and a
@@ -21,7 +21,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <title>cBoite — macOS popover</title>
+        <title>Omelette — macOS popover</title>
         <link rel="stylesheet" href="mock.css" />
     </head>
     <body>
@@ -36,7 +36,7 @@
             <div class="popover-wrap">
                 <div class="popover">
                     <div class="pop-head">
-                        <div class="pop-title">Clipboard Vault</div>
+                        <div class="pop-title">Everything you copied</div>
                         <div class="pop-count">38</div>
                     </div>
 
@@ -80,7 +80,7 @@
                         </div>
 
                         <div class="mac-row">
-                            <div class="mac-preview shot"></div>
+                            <div class="mac-preview shot tilt-b"></div>
                             <div class="mac-meta">
                                 <div class="mac-name">
                                     <span class="i i-image"></span>
@@ -98,7 +98,7 @@
                                     <span class="i i-align"></span>
                                     <span
                                         >glib-compile-schemas
-                                        "linux/cboite@dfxe.github.io/schemas/"</span
+                                        "linux/omelette@dfxe.github.io/schemas/"</span
                                     >
                                 </div>
                                 <div class="mac-sub">Text · 62 bytes · 2h</div>
@@ -136,7 +136,7 @@
                     <div class="pop-foot">
                         <div class="foot-note">
                             <span class="i i-tray"></span>
-                            <span>Local plaintext history</span>
+                            <span>Kept on this Mac, in plain text</span>
                         </div>
                         <div class="mac-switch"><span>Pause</span><i></i></div>
                         <div class="mac-btn"><span class="i i-camera"></span><span>Area</span></div>

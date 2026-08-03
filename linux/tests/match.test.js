@@ -4,7 +4,7 @@
 
 import {
     score, scoreAny, scorePre, scoreAnyPre, normalize, byScore, NO_MATCH,
-} from '../cboite@dfxe.github.io/match.js';
+} from '../omelette@dfxe.github.io/match.js';
 import { suite, it, eq, ok, descending } from './harness.js';
 
 suite('match');

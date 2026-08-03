@@ -46,7 +46,7 @@ function recopy(it, ctx) {
         try { [ok, bytes] = file.load_contents_finish(res); }
         catch (_) { ok = false; }
         if (!ok) {
-            Main.notifyError('cBoite', 'Image is no longer available');
+            Main.notifyError('Omelette', 'Image is no longer available');
             return;
         }
         clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(bytes));
@@ -137,7 +137,7 @@ function searchFields(it) {
 
 export const historyProvider = {
     id: 'history',
-    title: 'Clipboard history',
+    title: 'Things you copied',
     cap: 25,
 
     search(query, ctx) {
@@ -158,7 +158,7 @@ export const historyProvider = {
     emptyMessage(ctx) {
         const all = ctx.vault ? ctx.vault.items : [];
         return all.length === 0
-            ? 'Nothing copied yet — copy some text or an image'
+            ? 'Nothing pinned up yet. Copy anything and it lands here.'
             : null;
     },
 };
@@ -176,7 +176,7 @@ export const screenshotProvider = {
             score: matchScore,
             index,
             title: GLib.path_get_basename(path),
-            subtitle: 'Click to copy',
+            subtitle: 'Click to peel it off',
             visual: { kind: 'gicon', path, size: 64 },
             actions: [{
                 icon: 'insert-link-symbolic',
@@ -204,6 +204,8 @@ export const screenshotProvider = {
 
     emptyMessage(ctx) {
         const all = ctx.screenshots ? ctx.screenshots.entries : [];
-        return all.length === 0 ? 'No screenshots yet — press PrtScn' : null;
+        return all.length === 0
+            ? 'No shots yet. Press PrtScn and one turns up here.'
+            : null;
     },
 };

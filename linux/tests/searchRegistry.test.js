@@ -1,4 +1,4 @@
-import { runSearch, totalResults } from '../cboite@dfxe.github.io/searchRegistry.js';
+import { runSearch, totalResults } from '../omelette@dfxe.github.io/searchRegistry.js';
 import { suite, it, eq, ok, silenced } from './harness.js';
 
 suite('searchRegistry');
